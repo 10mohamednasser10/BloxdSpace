@@ -1,0 +1,1425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>BloxdSpace — Unofficial Bloxd.io Community</title>
+<meta name="description" content="BloxdSpace is an unofficial, fan-run community hub for Bloxd.io players. Not affiliated with or endorsed by Bloxd.io." />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  /*
+    Design tokens — grounded in Bloxd.io's voxel/building world:
+    a blue-charcoal "night build" base (not a flat neutral black),
+    one ember accent for action, a quiet moss green reserved only
+    for small live/online/success signals, and a chamfered-corner
+    shape language standing in for cut blocks instead of pills.
+  */
+  :root{
+    --bg:#10131a; --bg-raised:#161a22; --bg-overlay:#1d222c;
+    --border:#262b35; --border-strong:#39404d;
+    --ink:#eef1f5; --ink-muted:#97a1b0; --ink-faint:#565f6d;
+    --accent:#e8384f; --accent-hover:#ff4f66; --accent-muted:rgba(232,56,79,.14);
+    --moss:#4fae7d;
+    --radius:8px;
+    --notch:10px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);}
+  body{font-family:'Inter',-apple-system,sans-serif;-webkit-font-smoothing:antialiased;}
+  h1,h2,h3,h4{font-family:'Unbounded','Inter',sans-serif;margin:0;font-weight:600;}
+  p{margin:0;}
+  a{color:inherit;text-decoration:none;}
+  button{font-family:inherit;cursor:pointer;}
+  input,textarea{font-family:inherit;}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+  ::selection{background:var(--accent);color:#fff;}
+  img,svg{display:block;}
+  .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;}
+
+  .notched{clip-path:polygon(var(--notch) 0,100% 0,100% calc(100% - var(--notch)),calc(100% - var(--notch)) 100%,0 100%,0 var(--notch));}
+
+  .cube-mark{flex-shrink:0;}
+  .cube-mark path{stroke:var(--accent);stroke-width:1;stroke-linejoin:round;}
+  .cube-mark .face-top{fill:var(--ink);}
+  .cube-mark .face-left{fill:var(--border-strong);}
+  .cube-mark .face-right{fill:var(--ink-faint);}
+
+  /* ---------- shell layout ---------- */
+  .shell{display:flex;min-height:100vh;}
+  .sidebar{display:none;width:240px;flex-shrink:0;flex-direction:column;border-right:1px solid var(--border);background:var(--bg);}
+  .sidebar-brand{display:flex;align-items:center;gap:9px;height:64px;padding:0 20px;}
+  .brand-name{font-family:'Unbounded';font-weight:600;font-size:14px;}
+  .sidebar-nav{flex:1;overflow-y:auto;padding:8px 12px;}
+  .sidebar-nav ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px;}
+  .nav-link{display:flex;align-items:center;gap:12px;border-radius:6px;padding:9px 11px;font-size:14px;color:var(--ink-muted);border-left:2px solid transparent;}
+  .nav-link:hover{background:var(--bg-overlay);color:var(--ink);}
+  .nav-link.active{background:var(--bg-overlay);color:var(--ink);border-left-color:var(--accent);}
+  .nav-link.active svg{color:var(--accent);}
+  .nav-link svg{width:18px;height:18px;flex-shrink:0;}
+  .sidebar-create{margin-top:16px;display:flex;align-items:center;justify-content:center;gap:8px;clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);background:var(--accent);padding:10px 12px;font-size:14px;font-weight:500;color:#fff;border:none;width:100%;transition:background .15s;}
+  .sidebar-create:hover{background:var(--accent-hover);}
+  .sidebar-footer{border-top:1px solid var(--border);padding:16px;display:flex;flex-direction:column;gap:10px;}
+  .sidebar-user{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-muted);}
+
+  .main-col{flex:1;min-width:0;display:flex;flex-direction:column;}
+  .main{width:100%;max-width:800px;margin:0 auto;flex:1;padding:24px 16px 100px;}
+
+  .mobilenav{position:fixed;left:0;right:0;bottom:0;z-index:40;display:flex;align-items:center;justify-content:space-around;height:64px;border-top:1px solid var(--border);background:rgba(16,19,26,.95);backdrop-filter:blur(8px);padding-bottom:env(safe-area-inset-bottom);}
+  .mnav-link{display:flex;height:48px;width:48px;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-radius:6px;color:var(--ink-faint);}
+  .mnav-link svg{width:20px;height:20px;}
+  .mnav-link.active svg{color:var(--accent);}
+  .mnav-link.active span{color:var(--ink);}
+  .mnav-link span{font-size:10px;}
+  .mnav-create{display:flex;height:46px;width:46px;align-items:center;justify-content:center;clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px);background:var(--accent);color:#fff;box-shadow:0 4px 16px rgba(232,56,79,.35);border:none;}
+  .mnav-create svg{width:24px;height:24px;}
+  .mnav-create:active{transform:scale(.95);}
+
+  @media (min-width:1024px){
+    .sidebar{display:flex;}
+    .mobilenav{display:none;}
+    .main{padding:32px 32px 40px;}
+  }
+
+  /* ---------- auth shell ---------- */
+  .authshell{display:none;min-height:100vh;flex-direction:column;align-items:center;justify-content:center;padding:48px 16px;}
+  .auth-brand{display:flex;align-items:center;gap:8px;margin-bottom:24px;}
+  .auth-card{width:100%;max-width:380px;border-radius:var(--radius);border:1px solid var(--border);background:var(--bg-raised);padding:24px;}
+  .auth-badge-wrap{margin-top:24px;}
+
+  /* ---------- shared components ---------- */
+  .badge{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);padding:5px 10px 5px 8px;font-size:12px;color:var(--ink-muted);}
+  .badge::before{content:"";width:6px;height:6px;background:var(--accent);flex-shrink:0;}
+  .page-header{margin-bottom:24px;display:flex;align-items:flex-start;justify-content:space-between;gap:16px;}
+  .page-title{font-size:22px;}
+  .page-desc{margin-top:4px;font-size:14px;color:var(--ink-muted);max-width:52ch;}
+
+  .empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;border:1px solid var(--border);border-top-color:var(--border-strong);padding:56px 24px;text-align:center;background:var(--bg-raised);}
+  .empty-icon{display:flex;align-items:center;justify-content:center;width:52px;height:52px;background:var(--bg-overlay);border:1px solid var(--border-strong);}
+  .empty-icon svg{width:24px;height:24px;color:var(--ink-faint);}
+  .empty-icon.positive{border-color:var(--moss);}
+  .empty-icon.positive svg{color:var(--moss);}
+  .empty-title{font-family:'Unbounded';font-size:16px;font-weight:600;}
+  .empty-desc{max-width:380px;font-size:14px;color:var(--ink-muted);}
+  .empty-action{margin-top:6px;clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);background:var(--accent);padding:9px 18px;font-size:14px;font-weight:500;color:#fff;border:none;transition:background .15s;}
+  .empty-action:hover{background:var(--accent-hover);}
+
+  .card{border-radius:var(--radius);border:1px solid var(--border);border-top-color:var(--border-strong);background:var(--bg-raised);}
+
+  .chips{display:flex;gap:6px;overflow-x:auto;margin-bottom:24px;padding-bottom:4px;}
+  .chip{flex-shrink:0;border:1px solid var(--border);padding:7px 14px;font-size:14px;color:var(--ink-muted);background:transparent;white-space:nowrap;transition:border-color .15s,color .15s,background .15s;}
+  .chip:hover{color:var(--ink);}
+  .chip.active{border-color:var(--accent);background:var(--accent-muted);color:var(--ink);}
+  .chip.static{cursor:default;}
+
+  .search-wrap{position:relative;margin-bottom:16px;}
+  .search-wrap svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);width:16px;height:16px;color:var(--ink-faint);pointer-events:none;}
+  .input,.textarea,.search-input{width:100%;border-radius:8px;border:1px solid var(--border);background:var(--bg);padding:10px 12px;font-size:14px;color:var(--ink);}
+  .search-input{padding-left:38px;}
+  .input::placeholder,.textarea::placeholder{color:var(--ink-faint);}
+  .input:focus,.textarea:focus,.search-input:focus{border-color:var(--border-strong);outline:none;}
+  .input:disabled,.textarea:disabled{opacity:.6;cursor:not-allowed;}
+  .field{margin-bottom:16px;}
+  .field label{display:block;margin-bottom:6px;font-size:14px;}
+  .field-hint{margin-top:4px;font-size:12px;color:var(--ink-faint);}
+
+  .btn-primary{clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px);background:var(--accent);padding:10px 20px;font-size:14px;font-weight:500;color:#fff;border:none;transition:background .15s;}
+  .btn-primary:hover{background:var(--accent-hover);}
+  .btn-primary:disabled{opacity:.6;cursor:not-allowed;}
+  .btn-outline{border:1px solid var(--border);padding:10px 16px;font-size:14px;color:var(--ink);background:transparent;transition:border-color .15s;}
+  .btn-outline:hover{border-color:var(--border-strong);}
+
+  .notice{display:flex;align-items:flex-start;gap:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);padding:12px;font-size:14px;color:var(--ink-muted);}
+  .notice svg{width:16px;height:16px;flex-shrink:0;margin-top:2px;color:var(--accent);}
+  .notice.wide{background:var(--bg-raised);margin-bottom:24px;border-radius:var(--radius);border:1px solid transparent;border-top-color:var(--border-strong);padding:14px 16px;}
+
+  .banner{display:flex;align-items:flex-start;gap:8px;border:1px solid var(--border);background:var(--bg);padding:10px 12px;font-size:13px;color:var(--ink-muted);margin-bottom:12px;}
+  .banner svg{width:15px;height:15px;flex-shrink:0;margin-top:1px;color:var(--moss);}
+  .banner.error{border-color:var(--accent);}
+  .banner.error svg{color:var(--accent);}
+
+  .quick-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  @media (min-width:640px){.quick-grid{grid-template-columns:repeat(4,1fr);}}
+  .quick-item{display:flex;flex-direction:column;align-items:center;gap:8px;border-radius:var(--radius);border:1px solid var(--border);border-top-color:var(--border-strong);background:var(--bg-raised);padding:16px 12px;text-align:center;font-size:14px;transition:border-color .15s;}
+  .quick-item:hover{border-color:var(--border-strong);}
+  .quick-item svg{width:20px;height:20px;color:var(--accent);}
+
+  .hero{position:relative;padding:30px 24px;background-color:var(--bg-raised);overflow:hidden;}
+  .hero::before{content:"";position:absolute;inset:0;
+    background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);
+    background-size:24px 24px;background-position:-1px -1px;
+    -webkit-mask-image:radial-gradient(ellipse 70% 90% at 20% 0%,#000 0%,transparent 75%);
+    mask-image:radial-gradient(ellipse 70% 90% at 20% 0%,#000 0%,transparent 75%);}
+  .hero-tick{position:absolute;width:16px;height:16px;border:1.5px solid var(--accent);opacity:.55;}
+  .hero-tick.tl{top:10px;left:10px;border-right:none;border-bottom:none;}
+  .hero-tick.tr{top:10px;right:10px;border-left:none;border-bottom:none;}
+  .hero-tick.bl{bottom:10px;left:10px;border-right:none;border-top:none;}
+  .hero-tick.br{bottom:10px;right:10px;border-left:none;border-top:none;}
+  .hero>*{position:relative;}
+
+  section+section{margin-top:40px;}
+  .section-title{margin-bottom:12px;font-size:16px;font-weight:600;font-family:'Unbounded';}
+
+  .type-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:24px;}
+  @media (min-width:640px){.type-grid{grid-template-columns:repeat(4,1fr);}}
+  .type-item{display:flex;flex-direction:column;align-items:center;gap:8px;border:1px solid var(--border);padding:16px 12px;font-size:14px;color:var(--ink-muted);background:transparent;}
+  .type-item svg{width:20px;height:20px;}
+  .type-item.active{border-color:var(--accent);background:var(--accent-muted);color:var(--ink);}
+
+  .settings-section{margin-bottom:32px;}
+  .settings-section h2{font-size:15px;font-weight:600;margin-bottom:12px;font-family:'Unbounded';}
+  .settings-card{border:1px solid var(--border);overflow:hidden;}
+  .settings-row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 16px;background:var(--bg-raised);}
+  .settings-row.danger{background:rgba(232,56,79,.08);}
+  .settings-row+.settings-row{border-top:1px solid var(--border);}
+  .settings-row-label{font-size:14px;}
+  .settings-row-hint{font-size:12px;color:var(--ink-faint);margin-top:2px;}
+  .settings-row button{flex-shrink:0;border:1px solid var(--border);padding:6px 12px;font-size:12px;color:var(--ink-faint);background:transparent;}
+
+  .chat-wrap{display:flex;flex-direction:column;gap:16px;}
+  @media (min-width:1024px){.chat-wrap{flex-direction:row;}}
+  .channel-list{display:flex;gap:8px;overflow-x:auto;}
+  @media (min-width:1024px){.channel-list{flex-direction:column;width:224px;flex-shrink:0;}}
+  .channel-btn{flex-shrink:0;display:flex;align-items:center;gap:8px;border-radius:6px;padding:9px 11px;font-size:14px;color:var(--ink-muted);background:transparent;border:none;border-left:2px solid transparent;text-align:left;width:100%;}
+  .channel-btn.active{background:var(--bg-overlay);color:var(--ink);border-left-color:var(--accent);}
+  .channel-btn svg{width:16px;height:16px;flex-shrink:0;}
+  .channel-desc{display:none;font-size:11px;color:var(--ink-faint);}
+  @media (min-width:1024px){.channel-desc{display:block;}}
+  .chat-panel{flex:1;min-height:420px;max-height:560px;border-radius:var(--radius);border:1px solid var(--border);border-top-color:var(--border-strong);background:var(--bg-raised);display:flex;flex-direction:column;}
+  .chat-messages{flex:1;overflow-y:auto;padding:8px 0;}
+  .chat-empty{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;padding:0 24px;}
+  .chat-msg{display:flex;gap:8px;padding:6px 14px;}
+  .chat-msg-meta{display:flex;gap:6px;align-items:baseline;}
+  .chat-msg-author{font-weight:600;font-size:12.5px;}
+  .chat-msg-time{font-size:11px;color:var(--ink-faint);}
+  .chat-msg-body{font-size:13px;color:var(--ink);word-break:break-word;}
+  .chat-composer{display:flex;align-items:center;gap:8px;border-top:1px solid var(--border);padding:12px;}
+  .chat-composer input{flex:1;}
+  .chat-note{display:flex;align-items:center;gap:6px;padding:0 12px 12px;font-size:12px;color:var(--ink-faint);}
+  .chat-note svg{width:12px;height:12px;}
+
+  .profile-card{display:flex;flex-direction:column;align-items:center;gap:16px;border-radius:var(--radius);border:1px solid var(--border);border-top-color:var(--border-strong);background:var(--bg-raised);padding:40px 24px;text-align:center;}
+  .avatar-circle{display:flex;height:80px;width:80px;align-items:center;justify-content:center;border-radius:999px;border:1px solid var(--border);background:var(--bg);}
+  .avatar-circle svg{width:32px;height:32px;color:var(--ink-faint);}
+  .avatar-img{border-radius:999px;object-fit:cover;flex-shrink:0;background:var(--bg-overlay);}
+  .avatar-fallback{border-radius:999px;background:var(--bg-overlay);display:flex;align-items:center;justify-content:center;font-weight:600;color:var(--ink-muted);flex-shrink:0;}
+  .profile-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
+  .stat-grid{margin-top:32px;display:grid;grid-template-columns:repeat(3,1fr);gap:12px;text-align:center;}
+  .stat-item{border-radius:var(--radius);border:1px solid var(--border);border-top-color:var(--border-strong);background:var(--bg-raised);padding:16px 12px;}
+  .stat-item svg{width:16px;height:16px;color:var(--ink-faint);margin:0 auto 6px;}
+  .stat-item span{font-size:14px;color:var(--ink-faint);}
+
+  .post-card{border:1px solid var(--border);border-top-color:var(--border-strong);background:var(--bg-raised);padding:16px;margin-bottom:12px;}
+  .post-head{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
+  .post-author{font-size:14px;font-weight:600;}
+  .post-time{font-size:12px;color:var(--ink-faint);}
+  .post-title{font-size:16px;font-weight:600;margin-bottom:6px;font-family:'Unbounded';}
+  .post-body{font-size:14px;color:var(--ink-muted);white-space:pre-wrap;line-height:1.55;}
+  .post-media{margin-top:10px;max-width:100%;border:1px solid var(--border);}
+  .post-actions{display:flex;gap:6px;margin-top:12px;flex-wrap:wrap;}
+  .icon-btn{display:flex;align-items:center;gap:6px;border:1px solid var(--border);background:transparent;padding:6px 10px;font-size:13px;color:var(--ink-muted);}
+  .icon-btn:hover{border-color:var(--border-strong);color:var(--ink);}
+  .icon-btn.liked{border-color:var(--accent);color:var(--accent);}
+  .icon-btn svg{width:14px;height:14px;}
+  .icon-btn:disabled{opacity:.6;cursor:not-allowed;}
+  .deal-status{display:inline-flex;align-items:center;gap:4px;font-size:12px;padding:3px 8px;border:1px solid var(--moss);color:var(--moss);margin-bottom:8px;}
+  .deal-status svg{width:12px;height:12px;}
+  .comments-panel{display:none;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);}
+  .comments-panel.open{display:block;}
+  .comment-item{display:flex;gap:8px;margin-bottom:10px;font-size:13px;}
+  .comment-body{color:var(--ink-muted);}
+  .comment-form{display:flex;gap:8px;margin-top:8px;}
+  .comment-form input{flex:1;}
+
+  .mod-row{padding:12px;border:1px solid var(--border);margin-bottom:8px;font-size:13px;}
+  .mod-row-actions{display:flex;gap:6px;margin-top:8px;}
+  .spinner-row{padding:32px;text-align:center;color:var(--ink-faint);font-size:13px;}
+
+  @media (prefers-reduced-motion:reduce){*{transition-duration:.001ms !important;}}
+</style>
+</head>
+<body>
+
+<div class="shell" id="shell">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-col">
+    <main class="main"><div id="page"></div></main>
+  </div>
+  <nav class="mobilenav" id="mobilenav"></nav>
+</div>
+
+<div class="authshell" id="authshell">
+  <a href="#/" class="auth-brand">
+    <svg class="cube-mark" width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
+      <path class="face-top" d="M12 2L21 7L12 12L3 7Z"/>
+      <path class="face-left" d="M3 7L12 12L12 22L3 17Z"/>
+      <path class="face-right" d="M21 7L12 12L12 22L21 17Z"/>
+    </svg>
+    <span class="brand-name">BloxdSpace</span>
+  </a>
+  <div class="auth-card" id="authpage"></div>
+  <div class="auth-badge-wrap">
+    <span class="badge">Unofficial Bloxd.io community</span>
+  </div>
+</div>
+
+<script>
+/* ---------------------------------------------------------------
+   BloxdSpace — wired to a real Supabase backend.
+   Auth, posts, likes, comments, chat (Realtime), notifications
+   (trigger-generated), players search, leaderboards (SQL views),
+   moderation, and account settings all read and write real data.
+   No mock data anywhere — empty states mean the table is empty.
+------------------------------------------------------------------ */
+
+const SUPABASE_URL = 'https://okbyhmyemlozqozgikxw.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9rYnlobXllbWxvenFvemdpa3h3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk1ODM1MDcsImV4cCI6MjEwNTE1OTUwN30.vap83LCc-1k1WFwVhaesQRimfLlcl3jJeRS5DJVL58I';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+    flowType: 'implicit',
+    storage: window.localStorage,
+  },
+});
+
+function appOrigin() {
+  return window.location.href.split('#')[0].split('?')[0];
+}
+
+function isAuthCallbackHash(hash) {
+  const h = (hash || '').replace(/^#/, '');
+  return h.includes('access_token=') || h.includes('refresh_token=') || h.includes('error_description=') || h.startsWith('error=');
+}
+
+async function applySession(session) {
+  currentUser = session ? session.user : null;
+  if (currentUser) {
+    await loadProfile();
+    await loadBlocked();
+  } else {
+    currentProfile = null;
+    blockedIds = new Set();
+  }
+}
+
+let currentUser = null;
+let currentProfile = null;
+let blockedIds = new Set();
+let myLikedPostIds = new Set();
+let chatChannelsCache = [];
+let chatRealtimeChannel = null;
+const profileCache = new Map();
+
+const POST_TYPE_MAP = { post: 'text', guide: 'guide', deal: 'deal', image: 'image' };
+
+const sidebarItems = [
+  { label: 'Home', href: '#/', icon: 'home' },
+  { label: 'Community', href: '#/community', icon: 'users' },
+  { label: 'Chat', href: '#/chat', icon: 'message-square' },
+  { label: 'Players', href: '#/players', icon: 'gamepad-2' },
+  { label: 'Posts', href: '#/posts', icon: 'file-text' },
+  { label: 'Guides', href: '#/guides', icon: 'book-open' },
+  { label: 'Deals', href: '#/deals', icon: 'handshake' },
+  { label: 'Leaderboards', href: '#/leaderboards', icon: 'trophy' },
+  { label: 'Notifications', href: '#/notifications', icon: 'bell' },
+  { label: 'Profile', href: '#/profile', icon: 'user' },
+  { label: 'Settings', href: '#/settings', icon: 'settings' },
+];
+const mobileItems = [
+  { label: 'Home', href: '#/', icon: 'home' },
+  { label: 'Chat', href: '#/chat', icon: 'message-square' },
+  { label: 'Community', href: '#/community', icon: 'users' },
+  { label: 'Profile', href: '#/profile', icon: 'user' },
+];
+const authRoutes = ['#/login', '#/register', '#/reset-password'];
+
+/* ---------------- tiny helpers ---------------- */
+
+function icon(name, cls) { return `<i data-lucide="${name}" class="${cls || ''}"></i>`; }
+function isActive(href, current) { return href === '#/' ? (current === '#/' || current === '') : current.startsWith(href); }
+function esc(s) { const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML; }
+function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
+function timeAgo(iso) {
+  if (!iso) return '';
+  const diff = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+  if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+  if (diff < 2592000) return Math.floor(diff / 86400) + 'd ago';
+  return new Date(iso).toLocaleDateString();
+}
+function avatarHtml(profile, size) {
+  const s = size || 32;
+  if (profile && profile.avatar_url) {
+    return `<img class="avatar-img" style="width:${s}px;height:${s}px" src="${esc(profile.avatar_url)}" alt="">`;
+  }
+  const label = (profile && (profile.display_name || profile.username)) || '?';
+  return `<div class="avatar-fallback" style="width:${s}px;height:${s}px;font-size:${Math.round(s * 0.4)}px">${esc(label.trim().charAt(0).toUpperCase())}</div>`;
+}
+function banner(text, kind) {
+  return `<div class="banner ${kind === 'error' ? 'error' : ''}">${icon(kind === 'error' ? 'info' : 'check')}<span>${esc(text)}</span></div>`;
+}
+function emptyState({ iconName, title, desc, actionLabel, actionHref, tone }) {
+  return `
+    <div class="empty">
+      <div class="empty-icon${tone === 'positive' ? ' positive' : ''}">${icon(iconName)}</div>
+      <p class="empty-title">${title}</p>
+      <p class="empty-desc">${desc}</p>
+      ${actionLabel ? `<a href="${actionHref}" class="empty-action">${actionLabel}</a>` : ''}
+    </div>`;
+}
+function pageHeader(title, desc) {
+  return `
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">${title}</h1>
+        ${desc ? `<p class="page-desc">${desc}</p>` : ''}
+      </div>
+    </div>`;
+}
+function spinner(text) { return `<div class="spinner-row">${text || 'Loading…'}</div>`; }
+
+/* ---------------- shell chrome ---------------- */
+
+function renderSidebar(route) {
+  const items = sidebarItems.map(item => `
+    <li>
+      <a href="${item.href}" class="nav-link ${isActive(item.href, route) ? 'active' : ''}">
+        ${icon(item.icon)}
+        ${item.label}
+      </a>
+    </li>`).join('');
+
+  document.getElementById('sidebar').innerHTML = `
+    <div class="sidebar-brand">
+      <svg class="cube-mark" width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
+        <path class="face-top" d="M12 2L21 7L12 12L3 7Z"/>
+        <path class="face-left" d="M3 7L12 12L12 22L3 17Z"/>
+        <path class="face-right" d="M21 7L12 12L12 22L21 17Z"/>
+      </svg>
+      <span class="brand-name">BloxdSpace</span>
+    </div>
+    <nav class="sidebar-nav">
+      <ul>${items}</ul>
+      <a href="#/create" class="sidebar-create">${icon('plus')} Create</a>
+    </nav>
+    <div class="sidebar-footer">
+      ${currentUser ? `<div class="sidebar-user">${avatarHtml(currentProfile, 22)}<span>${esc((currentProfile && (currentProfile.display_name || currentProfile.username)) || 'Signed in')}</span></div>` : ''}
+      <span class="badge">Unofficial Bloxd.io community</span>
+    </div>`;
+}
+
+function renderMobileNav(route) {
+  const [a, b] = [mobileItems.slice(0, 2), mobileItems.slice(2)];
+  const link = item => `
+    <a href="${item.href}" class="mnav-link ${isActive(item.href, route) ? 'active' : ''}">
+      ${icon(item.icon)}
+      <span>${item.label}</span>
+    </a>`;
+  document.getElementById('mobilenav').innerHTML = `
+    ${a.map(link).join('')}
+    <a href="#/create" class="mnav-create" aria-label="Create">${icon('plus')}</a>
+    ${b.map(link).join('')}`;
+}
+
+/* ---------------- data layer ---------------- */
+
+async function loadProfile() {
+  if (!currentUser) { currentProfile = null; return; }
+  const { data } = await sb.from('profiles').select('*').eq('id', currentUser.id).maybeSingle();
+  currentProfile = data || null;
+}
+async function loadBlocked() {
+  if (!currentUser) { blockedIds = new Set(); return; }
+  const { data } = await sb.from('blocks').select('blocked_id').eq('blocker_id', currentUser.id);
+  blockedIds = new Set((data || []).map(b => b.blocked_id));
+}
+async function refreshMyLikes() {
+  if (!currentUser) { myLikedPostIds = new Set(); return; }
+  const { data } = await sb.from('likes').select('post_id').eq('user_id', currentUser.id).not('post_id', 'is', null);
+  myLikedPostIds = new Set((data || []).map(l => l.post_id));
+}
+async function getProfileCached(id) {
+  if (profileCache.has(id)) return profileCache.get(id);
+  const { data } = await sb.from('profiles').select('username,display_name,avatar_url').eq('id', id).maybeSingle();
+  profileCache.set(id, data);
+  return data;
+}
+
+async function fetchPosts({ type, limit, authorId, titleLike } = {}) {
+  let q = sb.from('posts')
+    .select('id,title,body,type,media_urls,category,created_at,is_completed,author_id,profiles!posts_author_id_fkey(username,display_name,avatar_url),likes(count),comments!comments_post_id_fkey(count)')
+    .eq('is_removed', false)
+    .order('created_at', { ascending: false })
+    .limit(limit || 20);
+  if (type) q = q.eq('type', type);
+  if (authorId) q = q.eq('author_id', authorId);
+  if (titleLike) q = q.ilike('title', `%${titleLike}%`);
+  const { data, error } = await q;
+  if (error) { console.error(error); return []; }
+  return (data || []).filter(p => !blockedIds.has(p.author_id));
+}
+
+async function fetchComments(postId) {
+  const { data } = await sb.from('comments')
+    .select('id,body,created_at,author_id,profiles!comments_author_id_fkey(username,display_name,avatar_url)')
+    .eq('post_id', postId).eq('is_removed', false)
+    .order('created_at', { ascending: true });
+  return (data || []).filter(c => !blockedIds.has(c.author_id));
+}
+
+async function createPost({ type, title, body, file }) {
+  if (!currentUser) return { error: 'Sign in to post.' };
+  let mediaUrls = [];
+  if (file) {
+    const path = `${currentUser.id}/${Date.now()}-${file.name}`;
+    const { error: upErr } = await sb.storage.from('bloxdspace-media').upload(path, file);
+    if (upErr) return { error: upErr.message };
+    const { data: pub } = sb.storage.from('bloxdspace-media').getPublicUrl(path);
+    mediaUrls = [pub.publicUrl];
+  }
+  const { error } = await sb.from('posts').insert({ author_id: currentUser.id, type, title, body: body || null, media_urls: mediaUrls });
+  if (error) return { error: error.message };
+  return { ok: true };
+}
+
+/* ---------------- post card + comments rendering ---------------- */
+
+function postListHtml(posts) {
+  if (!posts.length) return '';
+  return posts.map(p => {
+    const likeCount = (p.likes && p.likes[0] && p.likes[0].count) || 0;
+    const commentCount = (p.comments && p.comments[0] && p.comments[0].count) || 0;
+    const liked = myLikedPostIds.has(p.id);
+    const author = p.profiles || {};
+    const mine = currentUser && currentUser.id === p.author_id;
+    return `
+    <article class="post-card">
+      <div class="post-head">
+        ${avatarHtml(author, 32)}
+        <div>
+          <div class="post-author">${esc(author.display_name || author.username || 'Unknown')}</div>
+          <div class="post-time">${timeAgo(p.created_at)} · ${esc(p.type)}</div>
+        </div>
+      </div>
+      ${p.type === 'deal' ? `<span class="deal-status">${icon(p.is_completed ? 'check-circle' : 'circle')} ${p.is_completed ? 'Completed' : 'Open'}</span>` : ''}
+      <div class="post-title">${esc(p.title)}</div>
+      ${p.body ? `<div class="post-body">${esc(p.body)}</div>` : ''}
+      ${p.media_urls && p.media_urls[0] ? `<img class="post-media" src="${esc(p.media_urls[0])}" alt="">` : ''}
+      <div class="post-actions">
+        <button class="icon-btn like-btn ${liked ? 'liked' : ''}" data-post-id="${p.id}" data-liked="${liked}">${icon('heart')}<span>${likeCount}</span></button>
+        <button class="icon-btn comment-toggle" data-post-id="${p.id}">${icon('message-circle')}<span>${commentCount}</span></button>
+        ${p.type === 'deal' && mine && !p.is_completed ? `<button class="icon-btn complete-deal-btn" data-post-id="${p.id}">${icon('check')}<span>Mark completed</span></button>` : ''}
+        <button class="icon-btn report-btn" data-target-type="post" data-target-id="${p.id}">${icon('flag')}<span>Report</span></button>
+        ${currentUser && !mine ? `<button class="icon-btn block-btn" data-user-id="${p.author_id}">${icon('user-x')}<span>Block</span></button>` : ''}
+      </div>
+      <div class="comments-panel" id="comments-${p.id}"></div>
+    </article>`;
+  }).join('');
+}
+
+function commentsHtml(postId, comments) {
+  const list = comments.length
+    ? comments.map(c => `
+      <div class="comment-item">
+        ${avatarHtml(c.profiles || {}, 24)}
+        <div>
+          <span style="font-weight:600">${esc((c.profiles && (c.profiles.display_name || c.profiles.username)) || 'Unknown')}</span>
+          <span class="comment-body">${esc(c.body)}</span>
+          <div class="post-time">${timeAgo(c.created_at)}</div>
+        </div>
+      </div>`).join('')
+    : `<p class="empty-desc" style="text-align:left;max-width:none;">No comments yet — start the conversation.</p>`;
+  const form = currentUser
+    ? `<form class="comment-form" data-post-id="${postId}"><input type="text" class="input" placeholder="Write a comment" maxlength="500" required><button class="btn-primary" type="submit">Post</button></form>`
+    : `<p class="field-hint"><a href="#/login" style="color:var(--accent)">Log in</a> to comment.</p>`;
+  return list + form;
+}
+
+async function onCommentToggle(postId) {
+  const panel = document.getElementById('comments-' + postId);
+  if (!panel) return;
+  panel.classList.toggle('open');
+  if (panel.classList.contains('open') && !panel.dataset.loaded) {
+    panel.dataset.loaded = '1';
+    panel.innerHTML = spinner('Loading comments…');
+    const comments = await fetchComments(postId);
+    panel.innerHTML = commentsHtml(postId, comments);
+  }
+  if (window.lucide) lucide.createIcons();
+}
+
+async function onLikeClick(btn) {
+  if (!currentUser) { window.location.hash = '#/login'; return; }
+  const postId = btn.dataset.postId;
+  const liked = btn.dataset.liked === 'true';
+  btn.disabled = true;
+  if (liked) await sb.from('likes').delete().eq('user_id', currentUser.id).eq('post_id', postId);
+  else await sb.from('likes').insert({ user_id: currentUser.id, post_id: postId });
+  const countSpan = btn.querySelector('span');
+  let count = parseInt(countSpan.textContent, 10) || 0;
+  countSpan.textContent = liked ? Math.max(0, count - 1) : count + 1;
+  btn.dataset.liked = (!liked).toString();
+  btn.classList.toggle('liked', !liked);
+  if (liked) myLikedPostIds.delete(postId); else myLikedPostIds.add(postId);
+  btn.disabled = false;
+}
+
+async function onCompleteDealClick(btn) {
+  const postId = btn.dataset.postId;
+  btn.disabled = true;
+  await sb.from('posts').update({ is_completed: true }).eq('id', postId);
+  const card = btn.closest('.post-card');
+  const status = card.querySelector('.deal-status');
+  if (status) status.innerHTML = `${icon('check-circle')} Completed`;
+  btn.remove();
+  if (window.lucide) lucide.createIcons();
+}
+
+async function onReportClick(btn) {
+  if (!currentUser) { window.location.hash = '#/login'; return; }
+  const reason = window.prompt('Why are you reporting this?');
+  if (!reason) return;
+  btn.disabled = true;
+  const { error } = await sb.from('reports').insert({
+    reporter_id: currentUser.id,
+    target_type: btn.dataset.targetType,
+    target_id: btn.dataset.targetId,
+    reason,
+  });
+  const span = btn.querySelector('span');
+  if (span) span.textContent = error ? 'Failed' : 'Reported';
+}
+
+async function onBlockClick(btn) {
+  if (!currentUser) { window.location.hash = '#/login'; return; }
+  if (!window.confirm('Block this user? You will no longer see their posts or messages.')) return;
+  const userId = btn.dataset.userId;
+  const { error } = await sb.from('blocks').insert({ blocker_id: currentUser.id, blocked_id: userId });
+  if (!error) { blockedIds.add(userId); route(); }
+}
+
+/* ---------------- pages ---------------- */
+
+function pageHome() {
+  return `
+    <div class="hero">
+      <span class="hero-tick tl" aria-hidden="true"></span>
+      <span class="hero-tick tr" aria-hidden="true"></span>
+      <span class="hero-tick bl" aria-hidden="true"></span>
+      <span class="hero-tick br" aria-hidden="true"></span>
+      <span class="badge" style="margin-bottom:16px;display:inline-flex;">Unofficial Bloxd.io community</span>
+      <h1 style="font-size:28px;margin-top:16px;">Welcome to BloxdSpace</h1>
+      <p style="margin-top:10px;max-width:56ch;color:var(--ink-muted);line-height:1.55;">A community-run space for Bloxd.io players to share builds, trade items, ask questions, and find people to play with. BloxdSpace is fan-made and not operated or endorsed by Bloxd.io.</p>
+    </div>
+
+    <section>
+      <div class="quick-grid">
+        <a href="#/create" class="quick-item">${icon('file-text')}Start a post</a>
+        <a href="#/create" class="quick-item">${icon('book-open')}Write a guide</a>
+        <a href="#/create" class="quick-item">${icon('handshake')}Post a deal</a>
+        <a href="#/chat" class="quick-item">${icon('message-square')}Open chat</a>
+      </div>
+    </section>
+
+    <section><h2 class="section-title">Latest posts</h2><div id="home-posts">${spinner()}</div></section>
+    <section><h2 class="section-title">Popular guides</h2><div id="home-guides">${spinner()}</div></section>
+    <section><h2 class="section-title">Player activity</h2><div id="home-activity">${spinner()}</div></section>
+    <section><h2 class="section-title">Community statistics</h2><div id="home-stats">${spinner()}</div></section>`;
+}
+
+async function loadHome() {
+  await refreshMyLikes();
+  const [posts, guides, newPlayers, profilesCount, postsCount, chatCount] = await Promise.all([
+    fetchPosts({ limit: 5 }),
+    fetchPosts({ type: 'guide', limit: 3 }),
+    sb.from('profiles').select('username,display_name,created_at').order('created_at', { ascending: false }).limit(5).then(r => r.data || []),
+    sb.from('profiles').select('id', { count: 'exact', head: true }),
+    sb.from('posts').select('id', { count: 'exact', head: true }).eq('is_removed', false),
+    sb.from('chat_messages').select('id', { count: 'exact', head: true }),
+  ]);
+
+  document.getElementById('home-posts').innerHTML = posts.length ? postListHtml(posts) : emptyState({ iconName: 'file-text', title: 'Nothing here yet', desc: 'Be the first to create something in BloxdSpace.', actionLabel: 'Create a post', actionHref: '#/create' });
+  document.getElementById('home-guides').innerHTML = guides.length ? postListHtml(guides) : emptyState({ iconName: 'book-open', title: 'No guides published yet', desc: 'Share what you know — the first BedWars, building, or redstone guide starts here.', actionLabel: 'Write a guide', actionHref: '#/create' });
+  document.getElementById('home-activity').innerHTML = newPlayers.length
+    ? newPlayers.map(p => `<div class="mod-row">${icon('user-plus')} <strong>${esc(p.display_name || p.username)}</strong> joined · <span class="post-time">${timeAgo(p.created_at)}</span></div>`).join('')
+    : emptyState({ iconName: 'activity', title: "It's quiet in here", desc: 'New members will show up here once people start signing up.' });
+  document.getElementById('home-stats').innerHTML = `
+    <div class="quick-grid">
+      <div class="stat-item"><span style="display:block;font-size:20px;font-weight:600;color:var(--ink)">${profilesCount.count || 0}</span><span>Members</span></div>
+      <div class="stat-item"><span style="display:block;font-size:20px;font-weight:600;color:var(--ink)">${postsCount.count || 0}</span><span>Posts</span></div>
+      <div class="stat-item"><span style="display:block;font-size:20px;font-weight:600;color:var(--ink)">${chatCount.count || 0}</span><span>Chat messages</span></div>
+    </div>`;
+  if (window.lucide) lucide.createIcons();
+}
+
+const communityFilters = ['Popular', 'New', 'Questions', 'Builds', 'Guides', 'Deals', 'Discussions'];
+let communityActive = 'Popular';
+const COMMUNITY_TYPE_MAP = { Questions: 'question', Builds: 'build', Guides: 'guide', Deals: 'deal', Discussions: 'text' };
+
+function pageCommunity() {
+  const chips = communityFilters.map(f => `<button class="chip ${f === communityActive ? 'active' : ''}" data-community-filter="${f}">${f}</button>`).join('');
+  return `
+    ${pageHeader('Community', 'Discover what BloxdSpace players are posting.')}
+    <div class="search-wrap">${icon('search')}<input type="search" id="community-search" class="search-input" placeholder="Search posts, guides, deals..."></div>
+    <div class="chips">${chips}</div>
+    <div id="community-results">${spinner()}</div>`;
+}
+
+async function loadCommunity() {
+  const container = document.getElementById('community-results');
+  if (!container) return;
+  container.innerHTML = spinner();
+  await refreshMyLikes();
+  const q = (document.getElementById('community-search') || {}).value || '';
+  let posts;
+  if (communityActive === 'New' || communityActive === 'Popular') {
+    posts = await fetchPosts({ limit: 30, titleLike: q.trim() || undefined });
+    if (communityActive === 'Popular') posts = posts.sort((a, b) => ((b.likes && b.likes[0] && b.likes[0].count) || 0) - ((a.likes && a.likes[0] && a.likes[0].count) || 0));
+  } else {
+    posts = await fetchPosts({ type: COMMUNITY_TYPE_MAP[communityActive], limit: 30, titleLike: q.trim() || undefined });
+  }
+  container.innerHTML = posts.length ? postListHtml(posts) : emptyState({
+    iconName: 'compass', title: 'Nothing here yet',
+    desc: q.trim() ? `No results for "${esc(q.trim())}" — try a different search once more people have posted.` : 'Be the first to create something in BloxdSpace.',
+    actionLabel: 'Create a post', actionHref: '#/create',
+  });
+  if (window.lucide) lucide.createIcons();
+}
+
+function pagePlayers() {
+  return `
+    ${pageHeader('Players', 'Find other BloxdSpace members by username.')}
+    <div class="search-wrap">${icon('search')}<input type="search" id="players-search" class="search-input" placeholder="Search by BloxdSpace username"></div>
+    <div id="players-results">${emptyState({ iconName: 'search', title: 'Start typing to search', desc: 'This searches BloxdSpace accounts only. Bloxd.io has no public player API, so official in-game stats aren\u2019t available here — only what members share on their profile.' })}</div>`;
+}
+
+async function runPlayerSearch(q) {
+  const container = document.getElementById('players-results');
+  if (!container) return;
+  if (!q) { container.innerHTML = emptyState({ iconName: 'search', title: 'Start typing to search', desc: 'This searches BloxdSpace accounts only.' }); return; }
+  container.innerHTML = spinner('Searching…');
+  const { data } = await sb.from('profiles').select('id,username,display_name,bio,bloxd_username,is_bloxd_username_public,created_at').ilike('username', `%${q}%`).limit(20);
+  const results = (data || []).filter(p => !blockedIds.has(p.id));
+  container.innerHTML = results.length ? results.map(p => `
+    <div class="post-card">
+      <div class="post-head">${avatarHtml(p, 32)}<div><div class="post-author">${esc(p.display_name || p.username)}</div><div class="post-time">@${esc(p.username)} · joined ${timeAgo(p.created_at)}</div></div></div>
+      ${p.bio ? `<div class="post-body">${esc(p.bio)}</div>` : ''}
+      ${p.is_bloxd_username_public && p.bloxd_username ? `<div class="field-hint">Bloxd username: ${esc(p.bloxd_username)}</div>` : ''}
+    </div>`).join('') : emptyState({ iconName: 'users', title: `No members found for "${esc(q)}"`, desc: 'Try a different search.' });
+  if (window.lucide) lucide.createIcons();
+}
+
+function pagePosts() {
+  return `${pageHeader('Posts', 'Text, screenshots, builds, questions, and everything else the community shares.')}<div id="posts-results">${spinner()}</div>`;
+}
+async function loadPostsPage() {
+  await refreshMyLikes();
+  const posts = await fetchPosts({ limit: 30 });
+  document.getElementById('posts-results').innerHTML = posts.length ? postListHtml(posts) : emptyState({ iconName: 'file-text', title: 'Nothing here yet', desc: 'Be the first to create something in BloxdSpace.', actionLabel: 'Create a post', actionHref: '#/create' });
+  if (window.lucide) lucide.createIcons();
+}
+
+function pageGuides() {
+  const cats = ['Beginner', 'BedWars', 'Building', 'Survival', 'PvP', 'Redstone & code', 'Advanced'];
+  return `${pageHeader('Guides', 'Community-written guides for every stage of Bloxd.io.')}<div class="chips">${cats.map(c => `<span class="chip static">${c}</span>`).join('')}</div><div id="guides-results">${spinner()}</div>`;
+}
+async function loadGuidesPage() {
+  await refreshMyLikes();
+  const posts = await fetchPosts({ type: 'guide', limit: 30 });
+  document.getElementById('guides-results').innerHTML = posts.length ? postListHtml(posts) : emptyState({ iconName: 'book-open', title: 'No guides published yet', desc: 'Share what you know — the first guide in any category starts here.', actionLabel: 'Write a guide', actionHref: '#/create' });
+  if (window.lucide) lucide.createIcons();
+}
+
+function pageDeals() {
+  return `
+    ${pageHeader('Deals', 'Post items you have, items you want, and trade offers.')}
+    <div class="notice wide">${icon('shield-alert')}<p>BloxdSpace does not verify members or guarantee trades. Never send anything first to someone you don't trust, and report any deal that feels off.</p></div>
+    <div id="deals-results">${spinner()}</div>`;
+}
+async function loadDealsPage() {
+  await refreshMyLikes();
+  const posts = await fetchPosts({ type: 'deal', limit: 30 });
+  document.getElementById('deals-results').innerHTML = posts.length ? postListHtml(posts) : emptyState({ iconName: 'handshake', title: 'No deals posted yet', desc: 'Be the first to create something in BloxdSpace.', actionLabel: 'Post a deal', actionHref: '#/create' });
+  if (window.lucide) lucide.createIcons();
+}
+
+const leaderboardTabs = ['Most active', 'Most liked posts', 'Top guides'];
+let leaderboardActive = 'Most active';
+
+function pageLeaderboards() {
+  const chips = leaderboardTabs.map(t => `<button class="chip ${t === leaderboardActive ? 'active' : ''}" data-lb-filter="${t}">${t}</button>`).join('');
+  return `
+    ${pageHeader('Leaderboards', 'Ranked from real BloxdSpace activity only — nothing here is simulated.')}
+    <div class="chips">${chips}</div>
+    <div id="lb-results">${spinner()}</div>`;
+}
+async function loadLeaderboards() {
+  const container = document.getElementById('lb-results');
+  if (!container) return;
+  container.innerHTML = spinner();
+  let rows = [];
+  if (leaderboardActive === 'Most active') {
+    const { data } = await sb.from('leaderboard_most_active').select('*');
+    rows = (data || []).filter(r => !blockedIds.has(r.id)).map(r => ({ label: r.display_name || r.username, sub: '@' + r.username, value: r.post_count + ' posts' }));
+  } else if (leaderboardActive === 'Most liked posts') {
+    const { data } = await sb.from('leaderboard_most_liked').select('*');
+    rows = (data || []).filter(r => !blockedIds.has(r.id)).map(r => ({ label: r.display_name || r.username, sub: '@' + r.username, value: r.like_count + ' likes' }));
+  } else {
+    const { data } = await sb.from('leaderboard_top_guides').select('*');
+    rows = (data || []).map(r => ({ label: r.title, sub: 'by @' + r.author_username, value: r.like_count + ' likes' }));
+  }
+  container.innerHTML = rows.length ? rows.map((r, i) => `
+    <div class="mod-row"><div style="display:flex;justify-content:space-between;"><span>#${i + 1} ${esc(r.label)}</span><span style="color:var(--ink-faint)">${esc(r.value)}</span></div><div class="post-time">${esc(r.sub)}</div></div>
+  `).join('') : emptyState({ iconName: 'trophy', title: 'Not enough activity yet', desc: 'This board fills in once members start posting, liking, and helping each other out.' });
+  if (window.lucide) lucide.createIcons();
+}
+
+function pageNotifications() {
+  return `${pageHeader('Notifications')}<div id="notif-results">${spinner()}</div>`;
+}
+async function loadNotifications() {
+  const container = document.getElementById('notif-results');
+  if (!container) return;
+  if (!currentUser) { container.innerHTML = emptyState({ iconName: 'bell', title: 'Log in to see notifications', desc: 'Notifications are personal to your account.', actionLabel: 'Log in', actionHref: '#/login' }); return; }
+  container.innerHTML = spinner();
+  const { data } = await sb.from('notifications')
+    .select('id,type,read_at,created_at,actor:profiles!notifications_source_user_id_fkey(username,display_name,avatar_url)')
+    .eq('user_id', currentUser.id).order('created_at', { ascending: false }).limit(30);
+  const rows = data || [];
+  const verbs = { like: 'liked your post', comment: 'commented on your post', reply: 'replied to your comment', follow: 'started following you' };
+  container.innerHTML = rows.length ? rows.map(n => {
+    const actor = n.actor || {};
+    return `<div class="mod-row" style="${n.read_at ? '' : 'border-left:2px solid var(--accent);'}">
+      <div style="display:flex;align-items:center;gap:8px;">${avatarHtml(actor, 22)}<span><strong>${esc(actor.display_name || actor.username || 'Someone')}</strong> ${esc(verbs[n.type] || n.type)}</span></div>
+      <div class="post-time" style="margin-top:4px;">${timeAgo(n.created_at)}</div>
+    </div>`;
+  }).join('') : emptyState({ iconName: 'bell', title: "You're all caught up", desc: 'Likes, comments, replies, mentions, follows, and messages will show up here.', tone: 'positive' });
+  if (window.lucide) lucide.createIcons();
+  const unreadIds = rows.filter(n => !n.read_at).map(n => n.id);
+  if (unreadIds.length) await sb.from('notifications').update({ read_at: new Date().toISOString() }).in('id', unreadIds);
+}
+
+const chatChannelIcons = { general: 'hash', bedwars: 'swords', builds: 'blocks' };
+let chatActive = 'general';
+
+function pageChat() {
+  const list = chatChannelsCache.length ? chatChannelsCache.map(c => `
+    <button class="channel-btn ${c.slug === chatActive ? 'active' : ''}" data-channel="${c.slug}">
+      ${icon('hash')}<span><span style="display:block;">${esc(c.slug)}</span><span class="channel-desc">${esc(c.description || '')}</span></span>
+    </button>`).join('') : spinner('Loading channels…');
+  return `
+    ${pageHeader('Chat', 'Public channels for the BloxdSpace community.')}
+    <div class="chat-wrap">
+      <div class="channel-list">${list}</div>
+      <div class="chat-panel">
+        <div class="chat-messages" id="chat-messages">${spinner()}</div>
+        <form class="chat-composer" id="chat-form">
+          <input type="text" id="chat-input" placeholder="${currentUser ? 'Message #' + chatActive : 'Sign in to send a message'}" ${currentUser ? '' : 'disabled'} maxlength="500" autocomplete="off">
+          <button type="submit" class="btn-primary" ${currentUser ? '' : 'disabled'}>Send</button>
+        </form>
+        ${currentUser ? '' : `<p class="chat-note">${icon('lock')}<a href="#/login" style="color:var(--ink)">Log in</a> to send messages.</p>`}
+      </div>
+    </div>`;
+}
+
+function chatMsgHtml(m) {
+  const author = m.profiles || {};
+  return `<div class="chat-msg">${avatarHtml(author, 26)}<div class="chat-msg-body"><div class="chat-msg-meta"><span class="chat-msg-author">${esc(author.display_name || author.username || 'Unknown')}</span><span class="chat-msg-time">${timeAgo(m.created_at)}</span></div><div>${esc(m.body)}</div></div></div>`;
+}
+
+async function fetchMessages(channelId) {
+  const { data } = await sb.from('chat_messages')
+    .select('id,body,created_at,author_id,deleted_at,profiles!chat_messages_author_id_fkey(username,display_name,avatar_url)')
+    .eq('channel_id', channelId).is('deleted_at', null)
+    .order('created_at', { ascending: true }).limit(50);
+  return (data || []).filter(m => !blockedIds.has(m.author_id));
+}
+
+function subscribeChannel(channelId) {
+  if (chatRealtimeChannel) { sb.removeChannel(chatRealtimeChannel); chatRealtimeChannel = null; }
+  chatRealtimeChannel = sb.channel('chat-' + channelId)
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `channel_id=eq.${channelId}` }, async (payload) => {
+      const msg = payload.new;
+      if (blockedIds.has(msg.author_id)) return;
+      const messagesEl = document.getElementById('chat-messages');
+      if (!messagesEl) return;
+      const profile = await getProfileCached(msg.author_id);
+      const emptyEl = messagesEl.querySelector('.chat-empty');
+      if (emptyEl) messagesEl.innerHTML = '';
+      messagesEl.insertAdjacentHTML('beforeend', chatMsgHtml({ ...msg, profiles: profile }));
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+      if (window.lucide) lucide.createIcons();
+    })
+    .subscribe();
+}
+
+async function loadChat() {
+  if (!chatChannelsCache.length) {
+    const { data } = await sb.from('chat_channels').select('*').order('name');
+    chatChannelsCache = data || [];
+    if (!chatChannelsCache.find(c => c.slug === chatActive)) chatActive = (chatChannelsCache[0] || {}).slug || 'general';
+    document.getElementById('page').innerHTML = pageChat();
+    if (window.lucide) lucide.createIcons();
+  }
+  const channel = chatChannelsCache.find(c => c.slug === chatActive);
+  const messagesEl = document.getElementById('chat-messages');
+  if (!channel || !messagesEl) return;
+  messagesEl.innerHTML = spinner();
+  const messages = await fetchMessages(channel.id);
+  messagesEl.innerHTML = messages.length ? messages.map(chatMsgHtml).join('') : `<div class="chat-empty">${icon('message-square-off')}<p class="empty-title">Nothing here yet</p><p class="empty-desc">Be the first to say something in #${esc(chatActive)}.</p></div>`;
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+  if (window.lucide) lucide.createIcons();
+  subscribeChannel(channel.id);
+}
+
+const createTypes = [
+  { key: 'post', label: 'Post', icon: 'file-text' },
+  { key: 'guide', label: 'Guide', icon: 'book-open' },
+  { key: 'deal', label: 'Deal', icon: 'handshake' },
+  { key: 'image', label: 'Upload image', icon: 'image' },
+];
+let createActive = 'post';
+
+function pageCreate() {
+  if (!currentUser) {
+    return pageHeader('Create', 'Share something with the BloxdSpace community.') + emptyState({ iconName: 'lock', title: 'Log in to create something', desc: 'You need a BloxdSpace account to post, write a guide, or list a deal.', actionLabel: 'Log in', actionHref: '#/login' });
+  }
+  const types = createTypes.map(t => `<button class="type-item ${t.key === createActive ? 'active' : ''}" data-create-type="${t.key}">${icon(t.icon)}${t.label}</button>`).join('');
+  return `
+    ${pageHeader('Create', 'Share something with the BloxdSpace community.')}
+    <div class="type-grid">${types}</div>
+    <form class="card" id="create-form" style="padding:20px;display:flex;flex-direction:column;">
+      <div class="field">
+        <label for="create-title">Title</label>
+        <input id="create-title" class="input" required placeholder="${createActive === 'deal' ? 'e.g. Trading diamond sword for iron armor' : 'Give it a title'}">
+      </div>
+      <div class="field">
+        <label for="create-body">${createActive === 'image' ? 'Caption' : 'Details'}</label>
+        <textarea id="create-body" class="textarea" rows="5" ${createActive === 'image' ? '' : 'required'} placeholder="Write in your own words — no placeholder stats or fake claims."></textarea>
+      </div>
+      ${createActive === 'image' ? `<div class="field"><label for="create-image">Image</label><input id="create-image" type="file" accept="image/*" class="input" required></div>` : ''}
+      <div id="create-result"></div>
+      <button type="submit" class="btn-primary" id="create-submit" style="align-self:flex-start;">Publish</button>
+    </form>`;
+}
+
+function pageProfile() {
+  if (!currentUser) {
+    return `${pageHeader('Profile')}
+      <div class="profile-card">
+        <div class="avatar-circle">${icon('user')}</div>
+        <div><p class="empty-title">You're not signed in</p><p class="empty-desc" style="margin-top:4px;">Create a BloxdSpace account to set a username, bio, and Bloxd username, and to start posting.</p></div>
+        <div class="profile-actions"><a href="#/login" class="btn-outline">Log in</a><a href="#/register" class="btn-primary">Create account</a></div>
+      </div>`;
+  }
+  const p = currentProfile || {};
+  return `
+    ${pageHeader('Profile')}
+    <div class="profile-card">
+      ${avatarHtml(p, 80)}
+      <div>
+        <p class="empty-title">${esc(p.display_name || p.username || 'Player')}</p>
+        <p class="empty-desc" style="margin-top:4px;">@${esc(p.username || '')}${p.bio ? ' · ' + esc(p.bio) : ''}</p>
+      </div>
+      <div class="profile-actions">
+        <a href="#/settings" class="btn-outline">Edit profile</a>
+        <button class="btn-outline" id="logout-btn" type="button">Log out</button>
+      </div>
+    </div>
+    <div id="profile-stats" class="stat-grid">
+      <div class="stat-item">${icon('file-text')}<span>Posts — …</span></div>
+      <div class="stat-item">${icon('heart')}<span>Likes received — …</span></div>
+      <div class="stat-item">${icon('calendar')}<span>Joined ${p.created_at ? timeAgo(p.created_at) : '…'}</span></div>
+    </div>
+    <div style="margin-top:32px;">
+      <h2 class="section-title">Your posts</h2>
+      <div id="profile-posts">${spinner()}</div>
+    </div>`;
+}
+async function loadProfilePage() {
+  if (!currentUser) return;
+  await refreshMyLikes();
+  const posts = await fetchPosts({ authorId: currentUser.id, limit: 20 });
+  const postsEl = document.getElementById('profile-posts');
+  if (postsEl) postsEl.innerHTML = posts.length ? postListHtml(posts) : emptyState({ iconName: 'file-text', title: "You haven't posted yet", desc: 'Share something with the community.', actionLabel: 'Create a post', actionHref: '#/create' });
+  const totalLikes = posts.reduce((sum, p) => sum + ((p.likes && p.likes[0] && p.likes[0].count) || 0), 0);
+  const statEl = document.getElementById('profile-stats');
+  if (statEl) statEl.innerHTML = `
+    <div class="stat-item">${icon('file-text')}<span>Posts — ${posts.length}</span></div>
+    <div class="stat-item">${icon('heart')}<span>Likes received — ${totalLikes}</span></div>
+    <div class="stat-item">${icon('calendar')}<span>Joined ${currentProfile && currentProfile.created_at ? timeAgo(currentProfile.created_at) : ''}</span></div>`;
+  if (window.lucide) lucide.createIcons();
+}
+
+const settingsSections = [
+  { title: 'Account', rows: [{ label: 'Email address', hint: currentUserEmailHint }] },
+];
+function currentUserEmailHint() { return currentUser ? currentUser.email : ''; }
+
+function pageSettings() {
+  if (!currentUser) {
+    return `${pageHeader('Settings')}${emptyState({ iconName: 'lock', title: 'Log in to manage settings', desc: 'Settings are tied to your BloxdSpace account.', actionLabel: 'Log in', actionHref: '#/login' })}`;
+  }
+  const p = currentProfile || {};
+  const isMod = p.role === 'mod' || p.role === 'admin';
+  return `
+    ${pageHeader('Settings')}
+    <div class="settings-section">
+      <h2>Account</h2>
+      <div class="settings-card"><div class="settings-row"><div><p class="settings-row-label">Email address</p><p class="settings-row-hint">${esc(currentUser.email || '')}</p></div></div></div>
+    </div>
+
+    <div class="settings-section">
+      <h2>Profile</h2>
+      <form class="card" id="settings-profile-form" style="padding:16px;display:flex;flex-direction:column;">
+        <div class="field"><label for="s-display-name">Display name</label><input id="s-display-name" class="input" value="${esc(p.display_name || '')}"></div>
+        <div class="field"><label for="s-bio">Bio</label><textarea id="s-bio" class="textarea" rows="3">${esc(p.bio || '')}</textarea></div>
+        <div class="field"><label for="s-bloxd">Bloxd username</label><input id="s-bloxd" class="input" value="${esc(p.bloxd_username || '')}"></div>
+        <div class="field" style="display:flex;align-items:center;gap:8px;"><input type="checkbox" id="s-bloxd-public" ${p.is_bloxd_username_public ? 'checked' : ''}><label for="s-bloxd-public" style="margin:0;">Show Bloxd username publicly</label></div>
+        <div id="settings-profile-result"></div>
+        <button type="submit" class="btn-primary" style="align-self:flex-start;">Save changes</button>
+      </form>
+    </div>
+
+    <div class="settings-section">
+      <h2>Security</h2>
+      <form class="card" id="settings-password-form" style="padding:16px;display:flex;flex-direction:column;">
+        <div class="field"><label for="s-new-password">New password</label><input id="s-new-password" type="password" class="input" minlength="8" placeholder="At least 8 characters"></div>
+        <div id="settings-password-result"></div>
+        <button type="submit" class="btn-primary" style="align-self:flex-start;">Update password</button>
+      </form>
+    </div>
+
+    <div class="settings-section">
+      <h2>Blocked users</h2>
+      <div id="settings-blocked">${spinner()}</div>
+    </div>
+
+    ${isMod ? `<div class="settings-section"><h2>Moderation queue</h2><div id="settings-mod">${spinner()}</div></div>` : ''}
+
+    <div class="settings-section">
+      <h2>Danger zone</h2>
+      <div class="settings-card">
+        <div class="settings-row danger">
+          <div><p class="settings-row-label">Delete account</p><p class="settings-row-hint">Permanently remove your account and data</p></div>
+          <button id="delete-account-btn" type="button">Delete</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function loadSettingsPage() {
+  if (!currentUser) return;
+  const blockedEl = document.getElementById('settings-blocked');
+  if (blockedEl) {
+    const { data: blocks } = await sb.from('blocks').select('blocked_id, profiles!blocks_blocked_id_fkey(username,display_name)').eq('blocker_id', currentUser.id);
+    blockedEl.innerHTML = (blocks && blocks.length) ? `<div class="settings-card">${blocks.map(b => `
+      <div class="settings-row"><span class="settings-row-label">${esc((b.profiles && (b.profiles.display_name || b.profiles.username)) || 'Unknown')}</span><button class="unblock-btn" type="button" data-user-id="${b.blocked_id}">Unblock</button></div>
+    `).join('')}</div>` : `<p class="empty-desc" style="text-align:left;max-width:none;">People you've blocked will be listed here.</p>`;
+  }
+  if (currentProfile && (currentProfile.role === 'mod' || currentProfile.role === 'admin')) {
+    const modEl = document.getElementById('settings-mod');
+    if (modEl) {
+      const { data: reports } = await sb.from('reports').select('id,target_type,target_id,reason,status,created_at').eq('status', 'open').order('created_at', { ascending: false }).limit(20);
+      modEl.innerHTML = (reports && reports.length) ? reports.map(r => `
+        <div class="mod-row">
+          <div><strong>${esc(r.target_type)}</strong> reported — ${esc(r.reason)}</div>
+          <div class="post-time">${timeAgo(r.created_at)}</div>
+          <div class="mod-row-actions"><button class="btn-outline resolve-report-btn" type="button" data-report-id="${r.id}">Mark resolved</button></div>
+        </div>`).join('') : `<p class="empty-desc" style="text-align:left;max-width:none;">No open reports.</p>`;
+    }
+  }
+  if (window.lucide) lucide.createIcons();
+}
+
+function pageLogin() {
+  return `
+    <h1 style="font-size:20px;font-weight:600;">Log in</h1>
+    <p style="margin-top:4px;font-size:14px;color:var(--ink-muted);">Use the email you signed up with — not your BloxdSpace username.</p>
+    <form id="login-form" style="margin-top:20px;">
+      <div class="field"><label for="login-email">Email</label><input id="login-email" type="email" class="input" required autocomplete="email"></div>
+      <div class="field">
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+          <label for="login-password" style="margin:0;">Password</label>
+          <a href="#/reset-password" style="font-size:12px;color:var(--ink-muted);">Forgot password?</a>
+        </div>
+        <input id="login-password" type="password" class="input" required autocomplete="current-password">
+      </div>
+      <div id="login-result"></div>
+      <button type="submit" class="btn-primary" id="login-submit" style="width:100%;">Log in</button>
+    </form>
+    <div class="notice" style="margin-top:16px;">
+      ${icon('info')}
+      <div>
+        <p style="color:var(--ink);font-weight:600;margin-bottom:6px;">If login says email is not confirmed</p>
+        <p>Supabase is blocking the account until email is confirmed, and the free mailer often never sends the link. Fix it in the Supabase dashboard:</p>
+        <ol style="margin:8px 0 0 18px;padding:0;color:var(--ink-muted);">
+          <li>Open <a href="https://supabase.com/dashboard/project/okbyhmyemlozqozgikxw/auth/users" target="_blank" rel="noopener" style="color:var(--accent);">Authentication → Users</a></li>
+          <li>Click your user → confirm the email (or delete and recreate after step 4)</li>
+          <li>Or open <a href="https://supabase.com/dashboard/project/okbyhmyemlozqozgikxw/sql/new" target="_blank" rel="noopener" style="color:var(--accent);">SQL Editor</a> and run:<br>
+            <code style="display:block;margin-top:6px;color:var(--ink);font-size:11px;white-space:pre-wrap;">update auth.users set email_confirmed_at = now() where email_confirmed_at is null;</code>
+          </li>
+          <li>Then turn OFF confirm-email: <a href="https://supabase.com/dashboard/project/okbyhmyemlozqozgikxw/auth/providers" target="_blank" rel="noopener" style="color:var(--accent);">Authentication → Providers → Email</a></li>
+        </ol>
+      </div>
+    </div>
+    <p style="margin-top:20px;text-align:center;font-size:14px;color:var(--ink-muted);">New to BloxdSpace? <a href="#/register" style="color:var(--ink);">Create an account</a></p>`;
+}
+function pageRegister() {
+  return `
+    <h1 style="font-size:20px;font-weight:600;">Create your account</h1>
+    <p style="margin-top:4px;font-size:14px;color:var(--ink-muted);">Join the BloxdSpace community.</p>
+    <form id="register-form" style="margin-top:20px;">
+      <div class="field"><label for="reg-username">Username</label><input id="reg-username" type="text" class="input" required pattern="[a-zA-Z0-9_]{3,20}" title="3-20 characters: letters, numbers, underscores" autocomplete="username"></div>
+      <div class="field"><label for="reg-email">Email</label><input id="reg-email" type="email" class="input" required autocomplete="email"></div>
+      <div class="field">
+        <label for="reg-password">Password</label>
+        <input id="reg-password" type="password" class="input" required minlength="8" autocomplete="new-password">
+        <p class="field-hint">At least 8 characters. Stored as a salted hash — never in plain text.</p>
+      </div>
+      <div id="register-result"></div>
+      <button type="submit" class="btn-primary" style="width:100%;">Create account</button>
+    </form>
+    <p style="margin-top:20px;text-align:center;font-size:14px;color:var(--ink-muted);">Already have an account? <a href="#/login" style="color:var(--ink);">Log in</a></p>`;
+}
+function pageResetPassword() {
+  return `
+    <h1 style="font-size:20px;font-weight:600;">Reset your password</h1>
+    <p style="margin-top:4px;font-size:14px;color:var(--ink-muted);">We'll send a reset link to your email.</p>
+    <form id="reset-form" style="margin-top:20px;">
+      <div class="field"><label for="reset-email">Email</label><input id="reset-email" type="email" class="input" required autocomplete="email"></div>
+      <div id="reset-result"></div>
+      <button type="submit" class="btn-primary" style="width:100%;">Send reset link</button>
+    </form>
+    <p style="margin-top:20px;text-align:center;font-size:14px;color:var(--ink-muted);"><a href="#/login" style="color:var(--ink);">Back to log in</a></p>`;
+}
+
+/* ---------------- router ---------------- */
+
+const routes = {
+  '#/': pageHome, '#/community': pageCommunity, '#/chat': pageChat, '#/players': pagePlayers,
+  '#/posts': pagePosts, '#/guides': pageGuides, '#/deals': pageDeals, '#/leaderboards': pageLeaderboards,
+  '#/notifications': pageNotifications, '#/create': pageCreate, '#/profile': pageProfile, '#/settings': pageSettings,
+};
+const loaders = {
+  '#/': loadHome, '#/community': loadCommunity, '#/chat': loadChat, '#/posts': loadPostsPage,
+  '#/guides': loadGuidesPage, '#/deals': loadDealsPage, '#/leaderboards': loadLeaderboards,
+  '#/notifications': loadNotifications, '#/profile': loadProfilePage, '#/settings': loadSettingsPage,
+};
+const authPages = { '#/login': pageLogin, '#/register': pageRegister, '#/reset-password': pageResetPassword };
+
+async function route() {
+  let hash = window.location.hash || '#/';
+  if (isAuthCallbackHash(hash)) {
+    const params = new URLSearchParams(hash.replace(/^#/, ''));
+    const type = params.get('type');
+    const errorDesc = params.get('error_description') || params.get('error');
+    if (errorDesc) {
+      window.history.replaceState(null, '', appOrigin() + '#/login');
+      hash = '#/login';
+      window._authBanner = decodeURIComponent(errorDesc.replace(/\+/g, ' '));
+    } else {
+      const dest = type === 'recovery' ? '#/settings' : '#/';
+      window.history.replaceState(null, '', appOrigin() + dest);
+      hash = dest;
+    }
+  }
+  window.scrollTo(0, 0);
+
+  if (chatRealtimeChannel && hash !== '#/chat') { sb.removeChannel(chatRealtimeChannel); chatRealtimeChannel = null; }
+
+  if (authRoutes.includes(hash)) {
+    document.getElementById('shell').style.display = 'none';
+    document.getElementById('authshell').style.display = 'flex';
+    document.getElementById('authpage').innerHTML = authPages[hash]();
+    if (window._authBanner) {
+      const slot = document.getElementById('login-result') || document.getElementById('register-result') || document.getElementById('reset-result');
+      if (slot) slot.innerHTML = banner(window._authBanner, 'error');
+      window._authBanner = null;
+    }
+  } else {
+    if (!routes[hash]) hash = '#/';
+    document.getElementById('shell').style.display = 'flex';
+    document.getElementById('authshell').style.display = 'none';
+    renderSidebar(hash);
+    renderMobileNav(hash);
+    document.getElementById('page').innerHTML = routes[hash]();
+    if (window.lucide) lucide.createIcons();
+    if (loaders[hash]) await loaders[hash]();
+  }
+  if (window.lucide) lucide.createIcons();
+}
+
+/* ---------------- global delegated events ---------------- */
+
+document.addEventListener('click', async (e) => {
+  const cf = e.target.closest('[data-community-filter]');
+  if (cf) { communityActive = cf.dataset.communityFilter; document.querySelectorAll('[data-community-filter]').forEach(b => b.classList.toggle('active', b === cf)); loadCommunity(); return; }
+
+  const lb = e.target.closest('[data-lb-filter]');
+  if (lb) { leaderboardActive = lb.dataset.lbFilter; document.querySelectorAll('[data-lb-filter]').forEach(b => b.classList.toggle('active', b === lb)); loadLeaderboards(); return; }
+
+  const ch = e.target.closest('[data-channel]');
+  if (ch) {
+    chatActive = ch.dataset.channel;
+    document.querySelectorAll('[data-channel]').forEach(b => b.classList.toggle('active', b === ch));
+    const input = document.getElementById('chat-input');
+    if (input) input.placeholder = currentUser ? 'Message #' + chatActive : 'Sign in to send a message';
+    loadChat();
+    return;
+  }
+
+  const ct = e.target.closest('[data-create-type]');
+  if (ct) { createActive = ct.dataset.createType; document.getElementById('page').innerHTML = pageCreate(); if (window.lucide) lucide.createIcons(); return; }
+
+  const likeBtn = e.target.closest('.like-btn');
+  if (likeBtn) { onLikeClick(likeBtn); return; }
+
+  const commentToggle = e.target.closest('.comment-toggle');
+  if (commentToggle) { onCommentToggle(commentToggle.dataset.postId); return; }
+
+  const completeBtn = e.target.closest('.complete-deal-btn');
+  if (completeBtn) { onCompleteDealClick(completeBtn); return; }
+
+  const reportBtn = e.target.closest('.report-btn');
+  if (reportBtn) { onReportClick(reportBtn); return; }
+
+  const blockBtn = e.target.closest('.block-btn');
+  if (blockBtn) { onBlockClick(blockBtn); return; }
+
+  const unblockBtn = e.target.closest('.unblock-btn');
+  if (unblockBtn) { await sb.from('blocks').delete().eq('blocker_id', currentUser.id).eq('blocked_id', unblockBtn.dataset.userId); blockedIds.delete(unblockBtn.dataset.userId); loadSettingsPage(); return; }
+
+  const resolveBtn = e.target.closest('.resolve-report-btn');
+  if (resolveBtn) { await sb.from('reports').update({ status: 'resolved' }).eq('id', resolveBtn.dataset.reportId); loadSettingsPage(); return; }
+
+  const resendBtn = e.target.closest('#resend-confirm-btn');
+  if (resendBtn) {
+    const email = resendBtn.dataset.email;
+    resendBtn.disabled = true;
+    resendBtn.textContent = 'Sending…';
+    const { error } = await sb.auth.resend({ type: 'signup', email, options: { emailRedirectTo: appOrigin() } });
+    const resultEl = document.getElementById('login-result');
+    if (resultEl) resultEl.innerHTML = error
+      ? banner(error.message, 'error')
+      : banner('Confirmation email sent. Check inbox and spam, then click the link.');
+    if (window.lucide) lucide.createIcons();
+    return;
+  }
+
+  const logoutBtn = e.target.closest('#logout-btn');
+  if (logoutBtn) { await sb.auth.signOut(); window.location.hash = '#/'; return; }
+
+  const deleteBtn = e.target.closest('#delete-account-btn');
+  if (deleteBtn) {
+    if (!window.confirm('This permanently deletes your account and cannot be undone. Continue?')) return;
+    const { error } = await sb.rpc('delete_own_account');
+    if (!error) { await sb.auth.signOut(); window.location.hash = '#/'; } else { window.alert('Could not delete account: ' + error.message); }
+    return;
+  }
+});
+
+document.addEventListener('input', debounce((e) => {
+  if (e.target.id === 'players-search') runPlayerSearch(e.target.value.trim());
+  if (e.target.id === 'community-search') loadCommunity();
+}, 350));
+
+document.addEventListener('submit', async (e) => {
+  if (e.target.classList.contains('comment-form')) {
+    e.preventDefault();
+    if (!currentUser) return;
+    const postId = e.target.dataset.postId;
+    const input = e.target.querySelector('input');
+    const body = input.value.trim();
+    if (!body) return;
+    input.disabled = true;
+    const { error } = await sb.from('comments').insert({ post_id: postId, author_id: currentUser.id, body });
+    input.disabled = false;
+    if (!error) {
+      input.value = '';
+      const panel = document.getElementById('comments-' + postId);
+      const comments = await fetchComments(postId);
+      panel.innerHTML = commentsHtml(postId, comments);
+      const countSpan = document.querySelector(`.comment-toggle[data-post-id="${postId}"] span`);
+      if (countSpan) countSpan.textContent = comments.length;
+      if (window.lucide) lucide.createIcons();
+    }
+    return;
+  }
+
+  if (e.target.id === 'chat-form') {
+    e.preventDefault();
+    if (!currentUser) return;
+    const input = document.getElementById('chat-input');
+    const body = input.value.trim();
+    if (!body) return;
+    const channel = chatChannelsCache.find(c => c.slug === chatActive);
+    if (!channel) return;
+    input.value = '';
+    const { error } = await sb.from('chat_messages').insert({ channel_id: channel.id, author_id: currentUser.id, body });
+    if (error) window.alert('Could not send: ' + error.message);
+    return;
+  }
+
+  if (e.target.id === 'create-form') {
+    e.preventDefault();
+    const title = document.getElementById('create-title').value.trim();
+    const body = document.getElementById('create-body').value.trim();
+    const fileInput = document.getElementById('create-image');
+    const file = fileInput ? fileInput.files[0] : null;
+    const resultEl = document.getElementById('create-result');
+    const submitBtn = document.getElementById('create-submit');
+    submitBtn.disabled = true; submitBtn.textContent = 'Publishing…';
+    const res = await createPost({ type: POST_TYPE_MAP[createActive], title, body, file });
+    submitBtn.disabled = false; submitBtn.textContent = 'Publish';
+    if (res.error) { resultEl.innerHTML = banner(res.error, 'error'); }
+    else {
+      const dest = createActive === 'deal' ? '#/deals' : createActive === 'guide' ? '#/guides' : '#/posts';
+      window.location.hash = dest;
+      route();
+      return;
+    }
+    if (window.lucide) lucide.createIcons();
+    return;
+  }
+
+  if (e.target.id === 'settings-profile-form') {
+    e.preventDefault();
+    const display_name = document.getElementById('s-display-name').value.trim();
+    const bio = document.getElementById('s-bio').value.trim();
+    const bloxd_username = document.getElementById('s-bloxd').value.trim();
+    const is_bloxd_username_public = document.getElementById('s-bloxd-public').checked;
+    const resultEl = document.getElementById('settings-profile-result');
+    const { error } = await sb.from('profiles').update({ display_name, bio, bloxd_username, is_bloxd_username_public }).eq('id', currentUser.id);
+    if (error) { resultEl.innerHTML = banner(error.message, 'error'); }
+    else { await loadProfile(); renderSidebar(window.location.hash || '#/'); resultEl.innerHTML = banner('Saved.'); }
+    if (window.lucide) lucide.createIcons();
+    return;
+  }
+
+  if (e.target.id === 'settings-password-form') {
+    e.preventDefault();
+    const pw = document.getElementById('s-new-password').value;
+    const resultEl = document.getElementById('settings-password-result');
+    if (!pw || pw.length < 8) { resultEl.innerHTML = banner('Password must be at least 8 characters.', 'error'); if (window.lucide) lucide.createIcons(); return; }
+    const { error } = await sb.auth.updateUser({ password: pw });
+    resultEl.innerHTML = error ? banner(error.message, 'error') : banner('Password updated.');
+    e.target.reset();
+    if (window.lucide) lucide.createIcons();
+    return;
+  }
+
+  if (e.target.id === 'login-form') {
+    e.preventDefault();
+    const raw = document.getElementById('login-email').value.trim();
+    const email = raw.toLowerCase();
+    const password = document.getElementById('login-password').value;
+    const resultEl = document.getElementById('login-result');
+    const submitBtn = document.getElementById('login-submit');
+    if (!email.includes('@')) {
+      resultEl.innerHTML = banner('Log in with the email you used to sign up, not your username.', 'error');
+      if (window.lucide) lucide.createIcons();
+      return;
+    }
+    if (submitBtn) submitBtn.disabled = true;
+    resultEl.innerHTML = banner('Logging in…');
+    if (window.lucide) lucide.createIcons();
+    const { data, error } = await sb.auth.signInWithPassword({ email, password });
+    if (submitBtn) submitBtn.disabled = false;
+    if (error) {
+      const code = error.code || error.message || '';
+      if (code === 'email_not_confirmed' || /not confirmed/i.test(error.message || '')) {
+        resultEl.innerHTML = banner('Your email is not confirmed yet. Check your inbox and spam, then click the link. You can also resend it.', 'error') +
+          `<button type="button" class="btn-outline" id="resend-confirm-btn" data-email="${esc(email)}" style="margin-top:10px;width:100%;">Resend confirmation email</button>`;
+      } else if (code === 'invalid_credentials' || /invalid login/i.test(error.message || '')) {
+        resultEl.innerHTML = banner('Wrong email or password. Use the same email you registered with.', 'error');
+      } else {
+        resultEl.innerHTML = banner(error.message, 'error');
+      }
+      if (window.lucide) lucide.createIcons();
+    } else {
+      await applySession(data.session);
+      window.location.hash = '#/';
+      route();
+    }
+    return;
+  }
+
+  if (e.target.id === 'register-form') {
+    e.preventDefault();
+    const username = document.getElementById('reg-username').value.trim();
+    const email = document.getElementById('reg-email').value.trim().toLowerCase();
+    const password = document.getElementById('reg-password').value;
+    const resultEl = document.getElementById('register-result');
+    resultEl.innerHTML = banner('Creating your account…');
+    const { data, error } = await sb.auth.signUp({
+      email,
+      password,
+      options: {
+        data: { username },
+        emailRedirectTo: appOrigin(),
+      },
+    });
+    if (error) { resultEl.innerHTML = banner(error.message, 'error'); }
+    else if (data.session) {
+      await applySession(data.session);
+      window.location.hash = '#/';
+      route();
+      return;
+    } else {
+      resultEl.innerHTML = banner(`Account created. Confirm ${email} from the email we just sent (check spam), then log in. The confirmation link must open this same page.`);
+    }
+    if (window.lucide) lucide.createIcons();
+    return;
+  }
+
+  if (e.target.id === 'reset-form') {
+    e.preventDefault();
+    const email = document.getElementById('reset-email').value.trim().toLowerCase();
+    const resultEl = document.getElementById('reset-result');
+    const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: appOrigin() });
+    resultEl.innerHTML = error ? banner(error.message, 'error') : banner(`If an account exists for ${email}, a reset link is on its way. Open it on this same page.`);
+    if (window.lucide) lucide.createIcons();
+    return;
+  }
+});
+
+/* ---------------- init ---------------- */
+
+async function init() {
+  if (isAuthCallbackHash(window.location.hash)) {
+    await new Promise((r) => setTimeout(r, 80));
+  }
+  const { data: { session } } = await sb.auth.getSession();
+  await applySession(session);
+
+  sb.auth.onAuthStateChange(async (event, session) => {
+    if (event === 'INITIAL_SESSION') return;
+    const newId = session && session.user && session.user.id;
+    const oldId = currentUser && currentUser.id;
+    await applySession(session);
+    if (event === 'PASSWORD_RECOVERY') {
+      window.location.hash = '#/settings';
+      route();
+      return;
+    }
+    if (newId !== oldId) route();
+  });
+
+  route();
+}
+
+window.addEventListener('hashchange', () => {
+  if (isAuthCallbackHash(window.location.hash)) return;
+  route();
+});
+window.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
