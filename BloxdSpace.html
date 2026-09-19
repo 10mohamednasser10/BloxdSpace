@@ -1,0 +1,2283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>BloxdSpace — Unofficial Bloxd.io Community</title>
+<meta name="description" content="BloxdSpace is an unofficial, fan-run community hub for Bloxd.io players. Not affiliated with or endorsed by Bloxd.io." />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  /*
+    Design tokens — grounded in Bloxd.io's voxel/building world:
+    a blue-charcoal "night build" base (not a flat neutral black),
+    one ember accent for action, a quiet moss green reserved only
+    for small live/online/success signals, and a chamfered-corner
+    shape language standing in for cut blocks instead of pills.
+  */
+  :root{
+    --bg:#10131a; --bg-raised:#161a22; --bg-overlay:#1d222c;
+    --border:#262b35; --border-strong:#39404d;
+    --ink:#eef1f5; --ink-muted:#97a1b0; --ink-faint:#565f6d;
+    --accent:#e8384f; --accent-hover:#ff4f66; --accent-muted:rgba(232,56,79,.14);
+    --moss:#4fae7d;
+    --neu-dark:rgba(0,0,0,.5);
+    --neu-light:rgba(255,255,255,.035);
+    --radius:8px;
+    --notch:10px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);}
+  body{font-family:'Inter',-apple-system,sans-serif;-webkit-font-smoothing:antialiased;}
+  h1,h2,h3,h4{font-family:'Unbounded','Inter',sans-serif;margin:0;font-weight:600;}
+  p{margin:0;}
+  a{color:inherit;text-decoration:none;}
+  button{font-family:inherit;cursor:pointer;}
+  input,textarea{font-family:inherit;}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+  ::selection{background:var(--accent);color:#fff;}
+  img,svg{display:block;}
+  .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;}
+
+  .notched{clip-path:polygon(var(--notch) 0,100% 0,100% calc(100% - var(--notch)),calc(100% - var(--notch)) 100%,0 100%,0 var(--notch));}
+
+  .cube-mark{flex-shrink:0;}
+  .cube-mark path{stroke:var(--accent);stroke-width:1;stroke-linejoin:round;}
+  .cube-mark .face-top{fill:var(--ink);}
+  .cube-mark .face-left{fill:var(--border-strong);}
+  .cube-mark .face-right{fill:var(--ink-faint);}
+
+  /* ---------- shell layout ---------- */
+  .shell{display:flex;min-height:100vh;}
+  .sidebar{display:none;width:240px;flex-shrink:0;flex-direction:column;border-right:1px solid var(--border);background:var(--bg);}
+  .sidebar-brand{display:flex;align-items:center;gap:9px;height:64px;padding:0 20px;}
+  .brand-name{font-family:'Unbounded';font-weight:600;font-size:14px;}
+  .sidebar-nav{flex:1;overflow-y:auto;padding:8px 12px;}
+  .sidebar-nav ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px;}
+  .nav-link{display:flex;align-items:center;gap:12px;border-radius:6px;padding:9px 11px;font-size:14px;color:var(--ink-muted);border-left:2px solid transparent;}
+  .nav-link:hover{background:var(--bg-overlay);color:var(--ink);}
+  .nav-link.active{background:var(--bg-overlay);color:var(--ink);border-left-color:var(--accent);}
+  .nav-link.active svg{color:var(--accent);}
+  .nav-link svg{width:18px;height:18px;flex-shrink:0;}
+  .sidebar-create{margin-top:16px;display:flex;align-items:center;justify-content:center;gap:8px;clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);background:var(--accent);padding:10px 12px;font-size:14px;font-weight:500;color:#fff;border:none;width:100%;transition:background .15s;}
+  .sidebar-create:hover{background:var(--accent-hover);}
+  .sidebar-footer{border-top:1px solid var(--border);padding:16px;display:flex;flex-direction:column;gap:10px;}
+  .sidebar-user{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-muted);}
+
+  .main-col{flex:1;min-width:0;display:flex;flex-direction:column;}
+  .main{width:100%;max-width:800px;margin:0 auto;flex:1;padding:24px 16px 100px;}
+
+  .mobilenav{position:fixed;left:0;right:0;bottom:0;z-index:40;display:flex;align-items:center;justify-content:space-around;height:64px;border-top:1px solid var(--border);background:rgba(16,19,26,.95);backdrop-filter:blur(8px);padding-bottom:env(safe-area-inset-bottom);}
+  .mnav-link{display:flex;height:48px;width:48px;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-radius:6px;color:var(--ink-faint);}
+  .mnav-link svg{width:20px;height:20px;}
+  .mnav-link.active svg{color:var(--accent);}
+  .mnav-link.active span{color:var(--ink);}
+  .mnav-link span{font-size:10px;}
+  .mnav-create{display:flex;height:46px;width:46px;align-items:center;justify-content:center;clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px);background:var(--accent);color:#fff;box-shadow:0 4px 16px rgba(232,56,79,.35);border:none;}
+  .mnav-create svg{width:24px;height:24px;}
+  .mnav-create:active{transform:scale(.95);}
+
+  @media (min-width:1024px){
+    .sidebar{display:flex;}
+    .mobilenav{display:none;}
+    .main{padding:32px 32px 40px;}
+  }
+
+  /* ---------- auth shell ---------- */
+  .authshell{display:none;min-height:100vh;flex-direction:column;align-items:center;justify-content:center;padding:48px 16px;}
+  .auth-brand{display:flex;align-items:center;gap:8px;margin-bottom:24px;}
+  .auth-card{width:100%;max-width:380px;border-radius:var(--radius);border:1px solid var(--border);background:var(--bg-raised);padding:24px;}
+  .auth-badge-wrap{margin-top:24px;}
+
+  /* ---------- shared components ---------- */
+  .badge{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);padding:5px 10px 5px 8px;font-size:12px;color:var(--ink-muted);}
+  .badge::before{content:"";width:6px;height:6px;background:var(--accent);flex-shrink:0;}
+  .page-header{margin-bottom:24px;display:flex;align-items:flex-start;justify-content:space-between;gap:16px;}
+  .page-title{font-size:22px;}
+  .page-desc{margin-top:4px;font-size:14px;color:var(--ink-muted);max-width:52ch;}
+
+  .empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;border:1px solid var(--border);border-top-color:var(--border-strong);padding:56px 24px;text-align:center;background:var(--bg-raised);}
+  .empty-icon{display:flex;align-items:center;justify-content:center;width:52px;height:52px;background:var(--bg-overlay);border:1px solid var(--border-strong);}
+  .empty-icon svg{width:24px;height:24px;color:var(--ink-faint);}
+  .empty-icon.positive{border-color:var(--moss);}
+  .empty-icon.positive svg{color:var(--moss);}
+  .empty-title{font-family:'Unbounded';font-size:16px;font-weight:600;}
+  .empty-desc{max-width:380px;font-size:14px;color:var(--ink-muted);}
+  .empty-action{margin-top:6px;clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);background:var(--accent);padding:9px 18px;font-size:14px;font-weight:500;color:#fff;border:none;transition:background .15s;}
+  .empty-action:hover{background:var(--accent-hover);}
+
+  .card{border-radius:var(--radius);border:1px solid var(--border);border-top-color:var(--border-strong);background:var(--bg-raised);}
+
+  .chips{display:flex;gap:6px;overflow-x:auto;margin-bottom:24px;padding-bottom:4px;}
+  .chip{flex-shrink:0;border:1px solid var(--border);padding:7px 14px;font-size:14px;color:var(--ink-muted);background:transparent;white-space:nowrap;transition:border-color .15s,color .15s,background .15s;}
+  .chip:hover{color:var(--ink);}
+  .chip.active{border-color:var(--accent);background:var(--accent-muted);color:var(--ink);}
+  .chip.static{cursor:default;}
+
+  .search-wrap{position:relative;margin-bottom:16px;}
+  .search-wrap svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);width:16px;height:16px;color:var(--ink-faint);pointer-events:none;}
+  .input,.textarea,.search-input{width:100%;border-radius:8px;border:1px solid var(--border);background:var(--bg);padding:10px 12px;font-size:14px;color:var(--ink);}
+  .search-input{padding-left:38px;}
+  .input::placeholder,.textarea::placeholder{color:var(--ink-faint);}
+  .input:focus,.textarea:focus,.search-input:focus{border-color:var(--border-strong);outline:none;}
+  .input:disabled,.textarea:disabled{opacity:.6;cursor:not-allowed;}
+  .field{margin-bottom:16px;}
+  .field label{display:block;margin-bottom:6px;font-size:14px;}
+  .field-hint{margin-top:4px;font-size:12px;color:var(--ink-faint);}
+
+  .btn-primary{clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px);background:var(--accent);padding:10px 20px;font-size:14px;font-weight:500;color:#fff;border:none;transition:background .15s;}
+  .btn-primary:hover{background:var(--accent-hover);}
+  .btn-primary:disabled{opacity:.6;cursor:not-allowed;}
+  .btn-outline{border:1px solid var(--border);padding:10px 16px;font-size:14px;color:var(--ink);background:transparent;transition:border-color .15s;}
+  .btn-outline:hover{border-color:var(--border-strong);}
+
+  .notice{display:flex;align-items:flex-start;gap:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);padding:12px;font-size:14px;color:var(--ink-muted);}
+  .notice svg{width:16px;height:16px;flex-shrink:0;margin-top:2px;color:var(--accent);}
+  .notice.wide{background:var(--bg-raised);margin-bottom:24px;border-radius:var(--radius);border:1px solid transparent;border-top-color:var(--border-strong);padding:14px 16px;}
+
+  .banner{display:flex;align-items:flex-start;gap:8px;border:1px solid var(--border);background:var(--bg);padding:10px 12px;font-size:13px;color:var(--ink-muted);margin-bottom:12px;}
+  .banner svg{width:15px;height:15px;flex-shrink:0;margin-top:1px;color:var(--moss);}
+  .banner.error{border-color:var(--accent);}
+  .banner.error svg{color:var(--accent);}
+
+  .quick-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  @media (min-width:640px){.quick-grid{grid-template-columns:repeat(4,1fr);}}
+  .quick-item{display:flex;flex-direction:column;align-items:center;gap:8px;border-radius:var(--radius);border:1px solid var(--border);border-top-color:var(--border-strong);background:var(--bg-raised);padding:16px 12px;text-align:center;font-size:14px;transition:border-color .15s;}
+  .quick-item:hover{border-color:var(--border-strong);}
+  .quick-item svg{width:20px;height:20px;color:var(--accent);}
+
+  .hero{position:relative;padding:30px 24px;background-color:var(--bg-raised);overflow:hidden;}
+  .hero::before{content:"";position:absolute;inset:0;
+    background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);
+    background-size:24px 24px;background-position:-1px -1px;
+    -webkit-mask-image:radial-gradient(ellipse 70% 90% at 20% 0%,#000 0%,transparent 75%);
+    mask-image:radial-gradient(ellipse 70% 90% at 20% 0%,#000 0%,transparent 75%);}
+  .hero-tick{position:absolute;width:16px;height:16px;border:1.5px solid var(--accent);opacity:.55;}
+  .hero-tick.tl{top:10px;left:10px;border-right:none;border-bottom:none;}
+  .hero-tick.tr{top:10px;right:10px;border-left:none;border-bottom:none;}
+  .hero-tick.bl{bottom:10px;left:10px;border-right:none;border-top:none;}
+  .hero-tick.br{bottom:10px;right:10px;border-left:none;border-top:none;}
+  .hero>*{position:relative;}
+
+  section+section{margin-top:40px;}
+  .section-title{margin-bottom:12px;font-size:16px;font-weight:600;font-family:'Unbounded';}
+
+  .type-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:24px;}
+  @media (min-width:640px){.type-grid{grid-template-columns:repeat(4,1fr);}}
+  .type-item{display:flex;flex-direction:column;align-items:center;gap:8px;border:1px solid var(--border);padding:16px 12px;font-size:14px;color:var(--ink-muted);background:transparent;}
+  .type-item svg{width:20px;height:20px;}
+  .type-item.active{border-color:var(--accent);background:var(--accent-muted);color:var(--ink);}
+
+  .settings-section{margin-bottom:32px;}
+  .settings-section h2{font-size:15px;font-weight:600;margin-bottom:12px;font-family:'Unbounded';}
+  .settings-card{border:1px solid var(--border);overflow:hidden;}
+  .settings-row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 16px;background:var(--bg-raised);}
+  .settings-row.danger{background:rgba(232,56,79,.08);}
+  .settings-row+.settings-row{border-top:1px solid var(--border);}
+  .settings-row-label{font-size:14px;}
+  .settings-row-hint{font-size:12px;color:var(--ink-faint);margin-top:2px;}
+  .settings-row button{flex-shrink:0;border:1px solid var(--border);padding:6px 12px;font-size:12px;color:var(--ink-faint);background:transparent;}
+
+  .chat-wrap{display:flex;flex-direction:column;gap:16px;}
+  @media (min-width:1024px){.chat-wrap{flex-direction:row;}}
+  .channel-list{display:flex;gap:10px;overflow-x:auto;padding:2px;}
+  @media (min-width:1024px){.channel-list{flex-direction:column;width:224px;flex-shrink:0;}}
+  .channel-btn{flex-shrink:0;display:flex;align-items:center;gap:10px;border-radius:16px;padding:9px 12px;font-size:14px;color:var(--ink-muted);background:var(--bg-raised);border:none;width:100%;text-align:left;box-shadow:5px 5px 10px var(--neu-dark),-5px -5px 10px var(--neu-light);transition:box-shadow .15s,color .15s;}
+  .channel-btn.active{color:var(--ink);box-shadow:inset 3px 3px 7px var(--neu-dark),inset -3px -3px 7px var(--neu-light);}
+  .channel-btn.active .channel-icon-circle{background:var(--accent);box-shadow:none;}
+  .channel-btn.active .channel-icon-circle svg{color:#fff;}
+  .channel-icon-circle{display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:999px;background:var(--bg-overlay);flex-shrink:0;box-shadow:2px 2px 5px var(--neu-dark),-2px -2px 5px var(--neu-light);}
+  .channel-icon-circle svg{width:15px;height:15px;color:var(--accent);}
+
+  .chat-panel{flex:1;min-height:460px;max-height:600px;border-radius:22px;background:var(--bg-raised);display:flex;flex-direction:column;box-shadow:8px 8px 18px var(--neu-dark),-8px -8px 18px var(--neu-light);}
+  .chat-header{display:flex;align-items:center;gap:10px;padding:14px 16px;flex-shrink:0;}
+  .chat-header-icon{display:flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:999px;background:var(--bg-overlay);flex-shrink:0;box-shadow:2px 2px 5px var(--neu-dark),-2px -2px 5px var(--neu-light);}
+  .chat-header-icon svg{width:16px;height:16px;color:var(--accent);}
+  .chat-header-title{font-weight:600;font-size:14px;font-family:'Unbounded';line-height:1.3;}
+  .chat-header-desc{font-size:12px;color:var(--ink-faint);}
+  .chat-online{margin-left:auto;display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--ink-muted);padding:5px 10px;border-radius:999px;background:var(--bg-overlay);box-shadow:2px 2px 5px var(--neu-dark),-2px -2px 5px var(--neu-light);flex-shrink:0;}
+  .chat-online-dot{width:6px;height:6px;border-radius:999px;background:var(--moss);flex-shrink:0;}
+  .chat-messages{flex:1;overflow-y:auto;padding:14px 0;}
+  .chat-messages::-webkit-scrollbar{width:6px;}
+  .chat-messages::-webkit-scrollbar-thumb{background:var(--border-strong);}
+  .chat-empty{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;padding:0 24px;}
+  .chat-msg-row{display:flex;gap:8px;margin-top:12px;padding:0 16px;}
+  .chat-msg-row:first-child{margin-top:0;}
+  .chat-msg-row.mine{justify-content:flex-end;}
+  .chat-msg-row.theirs{justify-content:flex-start;}
+  .chat-msg-avatar{width:26px;flex-shrink:0;}
+  .chat-msg-avatar .avatar-img,.chat-msg-avatar .avatar-fallback{width:26px;height:26px;font-size:11px;}
+  .chat-msg-col{display:flex;flex-direction:column;max-width:74%;}
+  .chat-msg-row.mine .chat-msg-col{align-items:flex-end;}
+  .chat-msg-row.theirs .chat-msg-col{align-items:flex-start;}
+  .chat-msg-author{font-size:11.5px;font-weight:600;color:var(--ink-muted);margin-bottom:4px;margin-left:3px;}
+  .chat-bubble{padding:9px 13px;border-radius:16px;font-size:13.5px;line-height:1.45;word-break:break-word;}
+  .chat-bubble.mine{background:var(--accent);color:#fff;border-bottom-right-radius:5px;}
+  .chat-bubble.theirs{background:var(--bg-overlay);color:var(--ink);border-bottom-left-radius:5px;box-shadow:3px 3px 7px var(--neu-dark),-3px -3px 7px var(--neu-light);}
+  .chat-msg-time{font-size:10.5px;color:var(--ink-faint);margin-top:4px;padding:0 4px;}
+  .chat-composer{display:flex;align-items:center;gap:10px;padding:14px 16px;flex-shrink:0;}
+  .chat-input-wrap{flex:1;display:flex;align-items:center;gap:6px;background:var(--bg);border-radius:999px;padding:6px 8px 6px 16px;box-shadow:inset 2px 2px 5px var(--neu-dark),inset -2px -2px 5px var(--neu-light);}
+  .chat-input-wrap input{flex:1;background:transparent;border:none;color:var(--ink);font-size:13.5px;padding:6px 0;min-width:0;}
+  .chat-input-wrap input:focus{outline:none;}
+  .chat-input-wrap input::placeholder{color:var(--ink-faint);}
+  .chat-input-wrap input:disabled{opacity:.6;}
+  .emoji-btn{display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:999px;background:transparent;border:none;color:var(--ink-faint);flex-shrink:0;}
+  .emoji-btn:hover{color:var(--accent);}
+  .emoji-btn svg{width:17px;height:17px;}
+  .chat-send-btn{display:flex;align-items:center;justify-content:center;width:42px;height:42px;border-radius:999px;background:var(--accent);color:#fff;border:none;flex-shrink:0;box-shadow:3px 3px 9px rgba(232,56,79,.4);transition:background .15s;}
+  .chat-send-btn:hover{background:var(--accent-hover);}
+  .chat-send-btn:disabled{opacity:.5;cursor:not-allowed;box-shadow:none;}
+  .chat-send-btn svg{width:18px;height:18px;}
+  .chat-note{display:flex;align-items:center;gap:6px;padding:0 16px 14px;font-size:12px;color:var(--ink-faint);flex-shrink:0;}
+  .chat-note svg{width:12px;height:12px;}
+  .emoji-popover-fixed{position:fixed;background:var(--bg-raised);border-radius:14px;padding:8px;box-shadow:6px 6px 16px var(--neu-dark),-6px -6px 16px var(--neu-light);display:grid;grid-template-columns:repeat(6,1fr);gap:2px;z-index:200;}
+  .emoji-popover-fixed button{background:transparent;border:none;font-size:18px;padding:5px;border-radius:8px;cursor:pointer;line-height:1;}
+  .emoji-popover-fixed button:hover{background:var(--bg-overlay);}
+  .conv-preview{font-size:11.5px;color:var(--ink-faint);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px;}
+  .unread-dot{width:8px;height:8px;border-radius:999px;background:var(--accent);flex-shrink:0;margin-left:auto;}
+  .hide-conv-btn{position:absolute;top:8px;right:8px;width:20px;height:20px;display:flex;align-items:center;justify-content:center;border:none;background:transparent;color:var(--ink-faint);border-radius:999px;}
+  .hide-conv-btn:hover{color:var(--accent);background:var(--bg-overlay);}
+  .hide-conv-btn svg{width:12px;height:12px;}
+
+  .profile-card{display:flex;flex-direction:column;align-items:center;gap:16px;border-radius:var(--radius);border:1px solid var(--border);border-top-color:var(--border-strong);background:var(--bg-raised);padding:40px 24px;text-align:center;}
+  .avatar-circle{display:flex;height:80px;width:80px;align-items:center;justify-content:center;border-radius:999px;border:1px solid var(--border);background:var(--bg);}
+  .avatar-circle svg{width:32px;height:32px;color:var(--ink-faint);}
+  .avatar-img{border-radius:999px;object-fit:cover;flex-shrink:0;background:var(--bg-overlay);}
+  .avatar-fallback{border-radius:999px;background:var(--bg-overlay);display:flex;align-items:center;justify-content:center;font-weight:600;color:var(--ink-muted);flex-shrink:0;}
+  .profile-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
+  .stat-grid{margin-top:32px;display:grid;grid-template-columns:repeat(3,1fr);gap:12px;text-align:center;}
+  .stat-item{border-radius:var(--radius);border:1px solid var(--border);border-top-color:var(--border-strong);background:var(--bg-raised);padding:16px 12px;}
+  .stat-item svg{width:16px;height:16px;color:var(--ink-faint);margin:0 auto 6px;}
+  .stat-item span{font-size:14px;color:var(--ink-faint);}
+
+  .post-card{border:1px solid var(--border);border-top-color:var(--border-strong);background:var(--bg-raised);padding:16px;margin-bottom:12px;}
+  .post-head{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
+  .post-author{font-size:14px;font-weight:600;}
+  .post-time{font-size:12px;color:var(--ink-faint);}
+  .post-title{font-size:16px;font-weight:600;margin-bottom:6px;font-family:'Unbounded';}
+  .post-body{font-size:14px;color:var(--ink-muted);white-space:pre-wrap;line-height:1.55;}
+  .post-media{margin-top:10px;max-width:100%;border:1px solid var(--border);}
+  .post-actions{display:flex;gap:6px;margin-top:12px;flex-wrap:wrap;}
+  .icon-btn{display:flex;align-items:center;gap:6px;border:1px solid var(--border);background:transparent;padding:6px 10px;font-size:13px;color:var(--ink-muted);}
+  .icon-btn:hover{border-color:var(--border-strong);color:var(--ink);}
+  .icon-btn.liked{border-color:var(--accent);color:var(--accent);}
+  .icon-btn svg{width:14px;height:14px;}
+  .icon-btn:disabled{opacity:.6;cursor:not-allowed;}
+  .deal-status{display:inline-flex;align-items:center;gap:4px;font-size:12px;padding:3px 8px;border:1px solid var(--moss);color:var(--moss);margin-bottom:8px;}
+  .deal-status svg{width:12px;height:12px;}
+  .comments-panel{display:none;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);}
+  .comments-panel.open{display:block;}
+  .comment-item{display:flex;gap:8px;margin-bottom:10px;font-size:13px;}
+  .comment-body{color:var(--ink-muted);}
+  .comment-form{display:flex;gap:8px;margin-top:8px;}
+  .comment-form input{flex:1;}
+
+  .mod-row{padding:12px;border:1px solid var(--border);margin-bottom:8px;font-size:13px;}
+  .mod-row-actions{display:flex;gap:6px;margin-top:8px;}
+  .spinner-row{padding:32px;text-align:center;color:var(--ink-faint);font-size:13px;}
+
+  .nav-badge{margin-left:auto;min-width:16px;height:16px;border-radius:999px;background:var(--accent);color:#fff;font-size:10px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;padding:0 4px;}
+  .verified-mark{display:inline-flex;width:14px;height:14px;color:#3b82f6;vertical-align:-2px;margin-left:4px;}
+  .verified-mark svg{width:14px;height:14px;}
+  .lightbox{position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.88);display:none;align-items:center;justify-content:center;padding:20px;}
+  .lightbox.open{display:flex;}
+  .lightbox img{max-width:min(960px,100%);max-height:90vh;border-radius:8px;}
+  .lightbox-close{position:absolute;top:16px;right:16px;color:#fff;background:transparent;border:0;font-size:22px;cursor:pointer;}
+  .avatar-img,.post-media{cursor:zoom-in;}
+  .video-wrap{position:relative;margin-top:10px;width:100%;padding-top:56.25%;border:1px solid var(--border);background:#000;}
+  .video-wrap iframe{position:absolute;inset:0;width:100%;height:100%;border:0;}
+  .video-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
+  .yem-btn{display:inline-flex;align-items:center;gap:6px;background:#e11d2e;color:#fff;border:none;border-radius:8px;padding:8px 12px;font-size:13px;font-weight:600;}
+  .event-grid{display:grid;grid-template-columns:1fr;gap:14px;}
+  @media (min-width:700px){.event-grid{grid-template-columns:1fr 1fr;}}
+  .event-card{background:#14181f;border:1px solid #252b36;border-radius:16px;overflow:hidden;display:flex;flex-direction:column;}
+  .event-cover{position:relative;height:132px;background:#1c2430;}
+  .event-cover-art{position:absolute;inset:0;background-image:linear-gradient(135deg,rgba(0,0,0,.15),rgba(0,0,0,.55)),var(--art);}
+  .event-tag{position:absolute;left:10px;bottom:10px;background:#111;color:#fff;font-size:10px;letter-spacing:.08em;font-weight:700;padding:4px 8px;border-radius:6px;}
+  .event-body{padding:12px 14px 14px;display:flex;flex-direction:column;gap:6px;flex:1;}
+  .event-when{font-size:11px;color:#8b95a5;}
+  .event-name{font-family:'Unbounded';font-size:15px;line-height:1.3;}
+  .event-blurb{font-size:12px;color:#8b95a5;line-height:1.45;}
+  .event-foot{display:flex;align-items:center;justify-content:space-between;margin-top:10px;padding-top:10px;border-top:1px solid #252b36;}
+  .event-stats{display:flex;gap:16px;}
+  .event-stat label{display:block;font-size:10px;color:#6b7382;margin-bottom:2px;}
+  .event-stat span{font-size:13px;font-weight:600;}
+  .event-go{width:36px;height:36px;border:none;border-radius:999px;background:#f0a202;color:#111;display:flex;align-items:center;justify-content:center;}
+  .people-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;}
+  @media (min-width:800px){.people-grid{grid-template-columns:repeat(4,1fr);}}
+  .person-card{background:var(--bg-raised);border:1px solid var(--border);border-radius:12px;overflow:hidden;text-align:center;padding-bottom:14px;}
+  .person-cover{height:72px;background-size:cover;background-position:center;}
+  .person-card .avatar-fallback,.person-card .avatar-img{margin:-28px auto 8px;border:3px solid var(--bg-raised);width:56px;height:56px;}
+  .person-name{font-weight:700;font-size:14px;}
+  .person-sub{font-size:12px;color:var(--ink-faint);margin-top:2px;}
+  .person-actions{display:flex;gap:6px;justify-content:center;margin-top:10px;padding:0 8px;}
+  .person-actions button,.person-actions a{border-radius:6px;padding:6px 10px;font-size:12px;border:1px solid var(--border);background:transparent;color:var(--ink);}
+  .person-actions .msg{background:var(--accent);border-color:var(--accent);color:#fff;}
+
+  @media (prefers-reduced-motion:reduce){*{transition-duration:.001ms !important;}}
+</style>
+</head>
+<body>
+
+<div class="shell" id="shell">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-col">
+    <main class="main"><div id="page"></div></main>
+  </div>
+  <nav class="mobilenav" id="mobilenav"></nav>
+</div>
+<div id="lightbox" class="lightbox" hidden>
+  <button type="button" class="lightbox-close" id="lightbox-close" aria-label="Close">✕</button>
+  <img id="lightbox-img" alt="Full size">
+</div>
+
+<div class="authshell" id="authshell">
+  <a href="#/" class="auth-brand">
+    <svg class="cube-mark" width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
+      <path class="face-top" d="M12 2L21 7L12 12L3 7Z"/>
+      <path class="face-left" d="M3 7L12 12L12 22L3 17Z"/>
+      <path class="face-right" d="M21 7L12 12L12 22L21 17Z"/>
+    </svg>
+    <span class="brand-name">BloxdSpace</span>
+  </a>
+  <div class="auth-card" id="authpage"></div>
+  <div class="auth-badge-wrap">
+    <span class="badge">Unofficial Bloxd.io community</span>
+  </div>
+</div>
+
+<script>
+/* ---------------------------------------------------------------
+   BloxdSpace — wired to a real Supabase backend.
+   Auth, posts, likes, comments, chat (Realtime), notifications
+   (trigger-generated), players search, leaderboards (SQL views),
+   moderation, and account settings all read and write real data.
+   No mock data anywhere — empty states mean the table is empty.
+------------------------------------------------------------------ */
+
+const SUPABASE_URL = 'https://okbyhmyemlozqozgikxw.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9rYnlobXllbWxvenFvemdpa3h3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk1ODM1MDcsImV4cCI6MjEwNTE1OTUwN30.vap83LCc-1k1WFwVhaesQRimfLlcl3jJeRS5DJVL58I';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: 'implicit', storage: window.localStorage }
+});
+
+let currentUser = null;
+let currentProfile = null;
+let blockedIds = new Set();
+let myLikedPostIds = new Set();
+let mySavedPostIds = new Set();
+let chatChannelsCache = [];
+let chatRealtimeChannel = null;
+const profileCache = new Map();
+
+const POST_TYPE_MAP = { post: 'text', guide: 'guide', deal: 'deal', image: 'image', ad: 'text', event: 'text', youtube: 'text' };
+const CREATOR_EMAIL = '10mohamednasser10@gmail.com';
+const OWNER_PROFILE_ID = 'f9682c21-ccbe-4bb2-a077-df848508c649';
+const YEMVIDEO_URL = 'https://10mohamednasser10n-prog.github.io/YemVideo/';
+function isCreator() { return !!(currentUser && currentUser.email === CREATOR_EMAIL); }
+function isOwner() {
+  return isCreator() || (currentUser && currentUser.id === OWNER_PROFILE_ID) || !!(currentProfile && currentProfile.role === 'admin');
+}
+function isAdsOwner() { return isOwner(); }
+function openYemVideo() { window.open(YEMVIDEO_URL, '_blank', 'noopener'); }
+function youtubeIdFrom(text) {
+  if (!text) return null;
+  const m = String(text).match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/|live\/)|youtu\.be\/)([A-Za-z0-9_-]{6,})/i);
+  return m ? m[1] : null;
+}
+function videoSource(p) {
+  const urls = ((p && p.media_urls) || []).concat([p && p.body, p && p.title]);
+  for (const u of urls) {
+    const id = youtubeIdFrom(u);
+    if (id) return { kind: 'youtube', id };
+  }
+  if (p && p.category === 'video') return { kind: 'yem' };
+  return null;
+}
+function rankScore(p) {
+  const likes = (p.likes && p.likes[0] && p.likes[0].count) || 0;
+  const comments = (p.comments && p.comments[0] && p.comments[0].count) || 0;
+  const ageHours = Math.max(0.25, (Date.now() - new Date(p.created_at).getTime()) / 3600000);
+  return (likes * 3 + comments * 2 + 1) / Math.pow(ageHours + 2, 1.25);
+}
+function isVerified(profile) { return !!(profile && (profile.is_verified || profile.role === 'admin')); }
+function verifiedMark(profile) { return isVerified(profile) ? `<span class="verified-mark" title="Verified">${icon('badge-check')}</span>` : ''; }
+function displayNameHtml(profile, fallback) {
+  const name = (profile && (profile.display_name || profile.username)) || fallback || 'Someone';
+  return `${esc(name)}${verifiedMark(profile)}`;
+}
+function openLightbox(src) {
+  const box = document.getElementById('lightbox');
+  const img = document.getElementById('lightbox-img');
+  if (!box || !img || !src) return;
+  img.src = src; box.classList.add('open'); box.hidden = false;
+}
+function closeLightbox() {
+  const box = document.getElementById('lightbox');
+  const img = document.getElementById('lightbox-img');
+  if (img) img.src = '';
+  if (box) { box.classList.remove('open'); box.hidden = true; }
+}
+
+const sidebarItems = [
+  { label: 'Home', href: '#/', icon: 'home' },
+  { label: 'Community', href: '#/community', icon: 'users' },
+  { label: 'Chat', href: '#/chat', icon: 'message-square' },
+  { label: 'Messages', href: '#/messages', icon: 'mail' },
+  { label: 'Players', href: '#/players', icon: 'gamepad-2' },
+  { label: 'Posts', href: '#/posts', icon: 'file-text' },
+  { label: 'Guides', href: '#/guides', icon: 'book-open' },
+  { label: 'Deals', href: '#/deals', icon: 'handshake' },
+  { label: 'Ads', href: '#/ads', icon: 'megaphone' },
+  { label: 'Events', href: '#/events', icon: 'calendar' },
+  { label: 'Videos', href: '#/videos', icon: 'play' },
+  { label: 'Leaderboards', href: '#/leaderboards', icon: 'trophy' },
+  { label: 'Notifications', href: '#/notifications', icon: 'bell' },
+  { label: 'Profile', href: '#/profile', icon: 'user' },
+  { label: 'Settings', href: '#/settings', icon: 'settings' },
+];
+const mobileItems = [
+  { label: 'Home', href: '#/', icon: 'home' },
+  { label: 'Chat', href: '#/chat', icon: 'message-square' },
+  { label: 'Community', href: '#/community', icon: 'users' },
+  { label: 'Profile', href: '#/profile', icon: 'user' },
+];
+const authRoutes = ['#/login', '#/register', '#/reset-password'];
+
+/* ---------------- tiny helpers ---------------- */
+
+function icon(name, cls) { return `<i data-lucide="${name}" class="${cls || ''}"></i>`; }
+function isActive(href, current) { return href === '#/' ? (current === '#/' || current === '') : current.startsWith(href); }
+function esc(s) { const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML; }
+function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
+function timeAgo(iso) {
+  if (!iso) return '';
+  const diff = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+  if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+  if (diff < 2592000) return Math.floor(diff / 86400) + 'd ago';
+  return new Date(iso).toLocaleDateString();
+}
+function avatarHtml(profile, size) {
+  const s = size || 32;
+  if (profile && profile.avatar_url) {
+    return `<img class="avatar-img" style="width:${s}px;height:${s}px" src="${esc(profile.avatar_url)}" alt="">`;
+  }
+  const label = (profile && (profile.display_name || profile.username)) || '?';
+  return `<div class="avatar-fallback" style="width:${s}px;height:${s}px;font-size:${Math.round(s * 0.4)}px">${esc(label.trim().charAt(0).toUpperCase())}</div>`;
+}
+function banner(text, kind) {
+  return `<div class="banner ${kind === 'error' ? 'error' : ''}">${icon(kind === 'error' ? 'info' : 'check')}<span>${esc(text)}</span></div>`;
+}
+function emptyState({ iconName, title, desc, actionLabel, actionHref, tone }) {
+  return `
+    <div class="empty">
+      <div class="empty-icon${tone === 'positive' ? ' positive' : ''}">${icon(iconName)}</div>
+      <p class="empty-title">${title}</p>
+      <p class="empty-desc">${desc}</p>
+      ${actionLabel ? `<a href="${actionHref}" class="empty-action">${actionLabel}</a>` : ''}
+    </div>`;
+}
+function pageHeader(title, desc) {
+  return `
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">${title}</h1>
+        ${desc ? `<p class="page-desc">${desc}</p>` : ''}
+      </div>
+    </div>`;
+}
+function spinner(text) { return `<div class="spinner-row">${text || 'Loading…'}</div>`; }
+
+/* ---------------- shell chrome ---------------- */
+
+function renderSidebar(route) {
+  const items = sidebarItems.map(item => `
+    <li>
+      <a href="${item.href}" class="nav-link ${isActive(item.href, route) ? 'active' : ''}">
+        ${icon(item.icon)}
+        ${item.label}
+        ${item.href === '#/notifications' ? '<span class="nav-badge" id="nav-notif-badge" hidden></span>' : ''}
+      </a>
+    </li>`).join('');
+
+  document.getElementById('sidebar').innerHTML = `
+    <div class="sidebar-brand">
+      <svg class="cube-mark" width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
+        <path class="face-top" d="M12 2L21 7L12 12L3 7Z"/>
+        <path class="face-left" d="M3 7L12 12L12 22L3 17Z"/>
+        <path class="face-right" d="M21 7L12 12L12 22L21 17Z"/>
+      </svg>
+      <span class="brand-name">BloxdSpace</span>
+    </div>
+    <nav class="sidebar-nav">
+      <ul>${items}</ul>
+      <a href="#/create" class="sidebar-create">${icon('plus')} Create</a>
+    </nav>
+    <div class="sidebar-footer">
+      ${currentUser ? `<div class="sidebar-user">${avatarHtml(currentProfile, 22)}<span>${esc((currentProfile && (currentProfile.display_name || currentProfile.username)) || 'Signed in')}</span></div>` : ''}
+      <span class="badge">Unofficial Bloxd.io community</span>
+    </div>`;
+}
+
+function renderMobileNav(route) {
+  const [a, b] = [mobileItems.slice(0, 2), mobileItems.slice(2)];
+  const link = item => `
+    <a href="${item.href}" class="mnav-link ${isActive(item.href, route) ? 'active' : ''}">
+      ${icon(item.icon)}
+      <span>${item.label}</span>
+    </a>`;
+  document.getElementById('mobilenav').innerHTML = `
+    ${a.map(link).join('')}
+    <a href="#/create" class="mnav-create" aria-label="Create">${icon('plus')}</a>
+    ${b.map(link).join('')}`;
+}
+
+/* ---------------- data layer ---------------- */
+
+async function loadProfile() {
+  if (!currentUser) { currentProfile = null; return; }
+  const { data } = await sb.from('profiles').select('*').eq('id', currentUser.id).maybeSingle();
+  currentProfile = data || null;
+}
+async function loadBlocked() {
+  if (!currentUser) { blockedIds = new Set(); return; }
+  const { data } = await sb.from('blocks').select('blocked_id').eq('blocker_id', currentUser.id);
+  blockedIds = new Set((data || []).map(b => b.blocked_id));
+}
+async function refreshMyLikes() {
+  if (!currentUser) { myLikedPostIds = new Set(); mySavedPostIds = new Set(); return; }
+  try {
+    const [{ data: likeRows }, saveRes] = await Promise.all([
+      sb.from('likes').select('post_id').eq('user_id', currentUser.id).not('post_id', 'is', null),
+      sb.from('saved_posts').select('post_id').eq('user_id', currentUser.id),
+    ]);
+    myLikedPostIds = new Set((likeRows || []).map(l => l.post_id));
+    mySavedPostIds = new Set(((saveRes && saveRes.data) || []).map(s => s.post_id));
+  } catch (e) {
+    myLikedPostIds = myLikedPostIds || new Set();
+    mySavedPostIds = mySavedPostIds || new Set();
+  }
+}
+async function getProfileCached(id) {
+  if (profileCache.has(id)) return profileCache.get(id);
+  const { data } = await sb.from('profiles').select('username,display_name,avatar_url').eq('id', id).maybeSingle();
+  profileCache.set(id, data);
+  return data;
+}
+
+async function fetchPosts({ type, limit, authorId, titleLike, category } = {}) {
+  const selectRich = 'id,title,body,type,media_urls,category,created_at,is_completed,author_id,profiles!posts_author_id_fkey(username,display_name,avatar_url),likes(count),comments!comments_post_id_fkey(count)';
+  const selectPlain = 'id,title,body,type,media_urls,category,created_at,is_completed,author_id';
+  const applyFilters = (q) => {
+    q = q.eq('is_removed', false).order('created_at', { ascending: false }).limit(limit || 20);
+    if (type) q = q.eq('type', type);
+    if (authorId) q = q.eq('author_id', authorId);
+    if (titleLike) q = q.ilike('title', `%${titleLike}%`);
+    if (category) q = q.eq('category', category);
+    return q;
+  };
+  let { data, error } = await applyFilters(sb.from('posts').select(selectRich));
+  if (error) {
+    console.error(error);
+    ({ data, error } = await applyFilters(sb.from('posts').select(selectPlain)));
+  }
+  if (error) { console.error(error); return []; }
+  return (data || []).filter(p => !blockedIds.has(p.author_id));
+}
+
+async function fetchComments(postId) {
+  const { data } = await sb.from('comments')
+    .select('id,body,created_at,author_id,profiles!comments_author_id_fkey(username,display_name,avatar_url)')
+    .eq('post_id', postId).eq('is_removed', false)
+    .order('created_at', { ascending: true });
+  return (data || []).filter(c => !blockedIds.has(c.author_id));
+}
+
+async function createPost({ type, title, body, file, category, extraUrl }) {
+  if (!currentUser) return { error: 'Sign in to post.' };
+  if (category === 'ad' && !isAdsOwner()) return { error: 'Only the site owner can post ads.' };
+  let mediaUrls = [];
+  if (extraUrl) mediaUrls.push(extraUrl);
+  if (file) {
+    const path = `${currentUser.id}/${Date.now()}-${file.name}`;
+    const { error: upErr } = await sb.storage.from('bloxdspace-media').upload(path, file);
+    if (upErr) return { error: upErr.message };
+    const { data: pub } = sb.storage.from('bloxdspace-media').getPublicUrl(path);
+    mediaUrls.push(pub.publicUrl);
+  }
+  const { error } = await sb.from('posts').insert({ author_id: currentUser.id, type, title, body: body || null, media_urls: mediaUrls, category: category || null });
+  if (error) return { error: error.message };
+  return { ok: true };
+}
+
+/* ---------------- post card + comments rendering ---------------- */
+
+function postListHtml(posts) {
+  if (!posts.length) return '';
+  return posts.map(p => {
+    const likeCount = (p.likes && p.likes[0] && p.likes[0].count) || 0;
+    const commentCount = (p.comments && p.comments[0] && p.comments[0].count) || 0;
+    const liked = myLikedPostIds.has(p.id);
+    const saved = mySavedPostIds.has(p.id);
+    const author = p.profiles || {};
+    const mine = currentUser && currentUser.id === p.author_id;
+    return `
+    <article class="post-card" data-post-id="${p.id}">
+      <div class="post-head">
+        <a href="#/u/${esc(author.username || '')}">${avatarHtml(author, 32)}</a>
+        <div>
+          <a href="#/u/${esc(author.username || '')}" class="post-author" style="color:var(--ink);">${displayNameHtml(author, 'Unknown')}</a>
+          <div class="post-time">${timeAgo(p.created_at)} · ${esc(p.type)}${p.category ? ' · ' + esc(p.category) : ''}</div>
+        </div>
+      </div>
+      ${p.type === 'deal' ? `<span class="deal-status">${icon(p.is_completed ? 'check-circle' : 'circle')} ${p.is_completed ? 'Completed' : 'Open'}</span>` : ''}
+      <div class="post-title">${esc(p.title)}</div>
+      ${p.body ? `<div class="post-body">${esc(p.body)}</div>` : ''}
+      ${(() => {
+        const vid = videoSource(p);
+        if (vid && vid.kind === 'youtube') {
+          return `<div class="video-wrap"><iframe src="https://www.youtube.com/embed/${esc(vid.id)}" title="YouTube video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div>
+            <div class="video-actions"><button type="button" class="yem-btn open-yemvideo">${icon('play')} Watch on YemVideo</button></div>`;
+        }
+        if (vid && vid.kind === 'yem') {
+          return `<div class="video-actions"><button type="button" class="yem-btn open-yemvideo">${icon('play')} Watch on YemVideo</button></div>`;
+        }
+        const img = p.media_urls && p.media_urls[0] && !youtubeIdFrom(p.media_urls[0]) ? p.media_urls[0] : '';
+        return img ? `<img class="post-media zoomable" src="${esc(img)}" alt="">` : '';
+      })()}
+      <div class="post-actions">
+        <button class="icon-btn like-btn ${liked ? 'liked' : ''}" data-post-id="${p.id}" data-liked="${liked}">${icon('heart')}<span>${likeCount}</span></button>
+        <button class="icon-btn comment-toggle" data-post-id="${p.id}">${icon('message-circle')}<span>${commentCount}</span></button>
+        <button class="icon-btn save-btn ${saved ? 'liked' : ''}" data-post-id="${p.id}" data-saved="${saved}">${icon('bookmark')}</button>
+        <button class="icon-btn share-btn" data-post-id="${p.id}">${icon('share-2')}<span>Share</span></button>
+        ${p.type === 'deal' && mine && !p.is_completed ? `<button class="icon-btn complete-deal-btn" data-post-id="${p.id}">${icon('check')}<span>Mark completed</span></button>` : ''}
+        ${mine ? `<button class="icon-btn edit-post-btn" data-post-id="${p.id}">${icon('pencil')}<span>Edit</span></button>` : ''}
+        ${mine || isOwner() ? `<button class="icon-btn delete-post-btn" data-post-id="${p.id}">${icon('trash-2')}<span>Delete</span></button>` : ''}
+        ${!mine ? `<button class="icon-btn report-btn" data-target-type="post" data-target-id="${p.id}">${icon('flag')}<span>Report</span></button>` : ''}
+        ${currentUser && !mine ? `<button class="icon-btn block-btn" data-user-id="${p.author_id}">${icon('user-x')}<span>Block</span></button>` : ''}
+      </div>
+      <div class="comments-panel" id="comments-${p.id}"></div>
+    </article>`;
+  }).join('');
+}
+
+function commentsHtml(postId, comments) {
+  const list = comments.length
+    ? comments.map(c => `
+      <div class="comment-item">
+        ${avatarHtml(c.profiles || {}, 24)}
+        <div>
+          <span style="font-weight:600">${esc((c.profiles && (c.profiles.display_name || c.profiles.username)) || 'Unknown')}</span>
+          <span class="comment-body">${esc(c.body)}</span>
+          <div class="post-time">${timeAgo(c.created_at)}</div>
+        </div>
+      </div>`).join('')
+    : `<p class="empty-desc" style="text-align:left;max-width:none;">No comments yet — start the conversation.</p>`;
+  const form = currentUser
+    ? `<form class="comment-form" data-post-id="${postId}"><input type="text" class="input" placeholder="Write a comment" maxlength="500" required><button class="btn-primary" type="submit">Post</button></form>`
+    : `<p class="field-hint"><a href="#/login" style="color:var(--accent)">Log in</a> to comment.</p>`;
+  return list + form;
+}
+
+async function onCommentToggle(postId) {
+  const panel = document.getElementById('comments-' + postId);
+  if (!panel) return;
+  panel.classList.toggle('open');
+  if (panel.classList.contains('open') && !panel.dataset.loaded) {
+    panel.dataset.loaded = '1';
+    panel.innerHTML = spinner('Loading comments…');
+    const comments = await fetchComments(postId);
+    panel.innerHTML = commentsHtml(postId, comments);
+  }
+  if (window.lucide) lucide.createIcons();
+}
+
+async function onLikeClick(btn) {
+  if (!currentUser) { window.location.hash = '#/login'; return; }
+  const postId = btn.dataset.postId;
+  const liked = btn.dataset.liked === 'true';
+  btn.disabled = true;
+  if (liked) await sb.from('likes').delete().eq('user_id', currentUser.id).eq('post_id', postId);
+  else await sb.from('likes').insert({ user_id: currentUser.id, post_id: postId });
+  const countSpan = btn.querySelector('span');
+  let count = parseInt(countSpan.textContent, 10) || 0;
+  countSpan.textContent = liked ? Math.max(0, count - 1) : count + 1;
+  btn.dataset.liked = (!liked).toString();
+  btn.classList.toggle('liked', !liked);
+  if (liked) myLikedPostIds.delete(postId); else myLikedPostIds.add(postId);
+  btn.disabled = false;
+}
+
+async function onSaveClick(btn) {
+  if (!currentUser) { window.location.hash = '#/login'; return; }
+  const postId = btn.dataset.postId;
+  const saved = btn.dataset.saved === 'true';
+  btn.disabled = true;
+  if (saved) await sb.from('saved_posts').delete().eq('user_id', currentUser.id).eq('post_id', postId);
+  else await sb.from('saved_posts').insert({ user_id: currentUser.id, post_id: postId });
+  btn.dataset.saved = (!saved).toString();
+  btn.classList.toggle('liked', !saved);
+  if (saved) mySavedPostIds.delete(postId); else mySavedPostIds.add(postId);
+  btn.disabled = false;
+}
+
+async function onShareClick(btn) {
+  const url = window.location.origin + window.location.pathname + '#/p/' + btn.dataset.postId;
+  const span = btn.querySelector('span');
+  const original = span ? span.textContent : '';
+  try {
+    await navigator.clipboard.writeText(url);
+    if (span) { span.textContent = 'Copied!'; setTimeout(() => { span.textContent = original; }, 1500); }
+  } catch (err) {
+    window.prompt('Copy this link:', url);
+  }
+}
+
+async function onFollowClick(btn) {
+  if (!currentUser) { window.location.hash = '#/login'; return; }
+  const targetId = btn.dataset.userId;
+  const following = btn.dataset.following === 'true';
+  btn.disabled = true;
+  if (following) await sb.from('follows').delete().eq('follower_id', currentUser.id).eq('following_id', targetId);
+  else await sb.from('follows').insert({ follower_id: currentUser.id, following_id: targetId });
+  btn.dataset.following = (!following).toString();
+  btn.textContent = !following ? 'Following' : 'Follow';
+  btn.disabled = false;
+}
+
+function onEditPostClick(btn) {
+  const card = btn.closest('.post-card');
+  if (!card || card.querySelector('.edit-post-form')) return;
+  const postId = btn.dataset.postId;
+  const titleEl = card.querySelector('.post-title');
+  const bodyEl = card.querySelector('.post-body');
+  const currentTitle = titleEl ? titleEl.textContent : '';
+  const currentBody = bodyEl ? bodyEl.textContent : '';
+  const form = document.createElement('form');
+  form.className = 'edit-post-form';
+  form.dataset.postId = postId;
+  form.style.marginTop = '10px';
+  form.innerHTML = `
+    <input type="text" class="input edit-title-input" value="${esc(currentTitle)}" required style="margin-bottom:8px;">
+    <textarea class="textarea edit-body-input" rows="4" style="margin-bottom:8px;">${esc(currentBody)}</textarea>
+    <div style="display:flex;gap:8px;"><button type="submit" class="btn-primary">Save</button><button type="button" class="btn-outline cancel-edit-btn">Cancel</button></div>`;
+  card.insertBefore(form, card.querySelector('.post-actions'));
+  if (titleEl) titleEl.style.display = 'none';
+  if (bodyEl) bodyEl.style.display = 'none';
+}
+
+function onCancelEditClick(btn) {
+  const card = btn.closest('.post-card');
+  if (!card) return;
+  const form = card.querySelector('.edit-post-form');
+  if (form) form.remove();
+  const titleEl = card.querySelector('.post-title'); if (titleEl) titleEl.style.display = '';
+  const bodyEl = card.querySelector('.post-body'); if (bodyEl) bodyEl.style.display = '';
+}
+
+async function onDeletePostClick(btn) {
+  if (!window.confirm('Delete this post? This cannot be undone.')) return;
+  const postId = btn.dataset.postId;
+  const { error } = await sb.from('posts').update({ is_removed: true }).eq('id', postId);
+  if (!error) { const card = btn.closest('.post-card'); if (card) card.remove(); }
+  else window.alert('Could not delete: ' + error.message);
+}
+
+async function onCompleteDealClick(btn) {
+  const postId = btn.dataset.postId;
+  btn.disabled = true;
+  await sb.from('posts').update({ is_completed: true }).eq('id', postId);
+  const card = btn.closest('.post-card');
+  const status = card.querySelector('.deal-status');
+  if (status) status.innerHTML = `${icon('check-circle')} Completed`;
+  btn.remove();
+  if (window.lucide) lucide.createIcons();
+}
+
+async function onReportClick(btn) {
+  if (!currentUser) { window.location.hash = '#/login'; return; }
+  const reason = window.prompt('Why are you reporting this?');
+  if (!reason) return;
+  btn.disabled = true;
+  const { error } = await sb.from('reports').insert({
+    reporter_id: currentUser.id,
+    target_type: btn.dataset.targetType,
+    target_id: btn.dataset.targetId,
+    reason,
+  });
+  const span = btn.querySelector('span');
+  if (span) span.textContent = error ? 'Failed' : 'Reported';
+}
+
+async function onBlockClick(btn) {
+  if (!currentUser) { window.location.hash = '#/login'; return; }
+  if (!window.confirm('Block this user? You will no longer see their posts or messages.')) return;
+  const userId = btn.dataset.userId;
+  const { error } = await sb.from('blocks').insert({ blocker_id: currentUser.id, blocked_id: userId });
+  if (!error) { blockedIds.add(userId); route(); }
+}
+
+/* ---------------- pages ---------------- */
+
+function pageHome() {
+  return `
+    <div class="hero">
+      <span class="hero-tick tl" aria-hidden="true"></span>
+      <span class="hero-tick tr" aria-hidden="true"></span>
+      <span class="hero-tick bl" aria-hidden="true"></span>
+      <span class="hero-tick br" aria-hidden="true"></span>
+      <span class="badge" style="margin-bottom:16px;display:inline-flex;">Unofficial Bloxd.io community</span>
+      <h1 style="font-size:28px;margin-top:16px;">Welcome to BloxdSpace</h1>
+      <p style="margin-top:10px;max-width:56ch;color:var(--ink-muted);line-height:1.55;">A community-run space for Bloxd.io players to share builds, trade items, ask questions, and find people to play with. BloxdSpace is fan-made and not operated or endorsed by Bloxd.io.</p>
+    </div>
+
+    <section>
+      <div class="quick-grid">
+        <a href="#/create" class="quick-item">${icon('file-text')}Start a post</a>
+        <a href="#/create" class="quick-item">${icon('book-open')}Write a guide</a>
+        <a href="#/create" class="quick-item">${icon('handshake')}Post a deal</a>
+        <a href="#/chat" class="quick-item">${icon('message-square')}Open chat</a>
+      </div>
+    </section>
+
+    <section><h2 class="section-title">Latest posts</h2><div id="home-posts">${spinner()}</div></section>
+    <section><h2 class="section-title">Popular guides</h2><div id="home-guides">${spinner()}</div></section>
+    <section><h2 class="section-title">Player activity</h2><div id="home-activity">${spinner()}</div></section>
+    <section><h2 class="section-title">Community statistics</h2><div id="home-stats">${spinner()}</div></section>`;
+}
+
+async function loadHome() {
+  await refreshMyLikes();
+  const [posts, guides, newPlayers, profilesCount, postsCount, chatCount] = await Promise.all([
+    fetchPosts({ limit: 5 }),
+    fetchPosts({ type: 'guide', limit: 3 }),
+    sb.from('profiles').select('username,display_name,created_at').order('created_at', { ascending: false }).limit(5).then(r => r.data || []),
+    sb.from('profiles').select('id', { count: 'exact', head: true }),
+    sb.from('posts').select('id', { count: 'exact', head: true }).eq('is_removed', false),
+    sb.from('chat_messages').select('id', { count: 'exact', head: true }),
+  ]);
+
+  document.getElementById('home-posts').innerHTML = posts.length ? postListHtml(posts) : emptyState({ iconName: 'file-text', title: 'Nothing here yet', desc: 'Be the first to create something in BloxdSpace.', actionLabel: 'Create a post', actionHref: '#/create' });
+  document.getElementById('home-guides').innerHTML = guides.length ? postListHtml(guides) : emptyState({ iconName: 'book-open', title: 'No guides published yet', desc: 'Share what you know — the first BedWars, building, or redstone guide starts here.', actionLabel: 'Write a guide', actionHref: '#/create' });
+  document.getElementById('home-activity').innerHTML = newPlayers.length
+    ? newPlayers.map(p => `<div class="mod-row">${icon('user-plus')} <strong>${esc(p.display_name || p.username)}</strong> joined · <span class="post-time">${timeAgo(p.created_at)}</span></div>`).join('')
+    : emptyState({ iconName: 'activity', title: "It's quiet in here", desc: 'New members will show up here once people start signing up.' });
+  document.getElementById('home-stats').innerHTML = `
+    <div class="quick-grid">
+      <div class="stat-item"><span style="display:block;font-size:20px;font-weight:600;color:var(--ink)">${profilesCount.count || 0}</span><span>Members</span></div>
+      <div class="stat-item"><span style="display:block;font-size:20px;font-weight:600;color:var(--ink)">${postsCount.count || 0}</span><span>Posts</span></div>
+      <div class="stat-item"><span style="display:block;font-size:20px;font-weight:600;color:var(--ink)">${chatCount.count || 0}</span><span>Chat messages</span></div>
+    </div>`;
+  if (window.lucide) lucide.createIcons();
+}
+
+const communityFilters = ['Popular', 'New', 'Questions', 'Builds', 'Guides', 'Deals', 'Discussions'];
+let communityActive = 'Popular';
+const COMMUNITY_TYPE_MAP = { Questions: 'question', Builds: 'build', Guides: 'guide', Deals: 'deal', Discussions: 'text' };
+
+function pageCommunity() {
+  const chips = communityFilters.map(f => `<button class="chip ${f === communityActive ? 'active' : ''}" data-community-filter="${f}">${f}</button>`).join('');
+  return `
+    ${pageHeader('Community', 'Discover what BloxdSpace players are posting.')}
+    <div class="search-wrap">${icon('search')}<input type="search" id="community-search" class="search-input" placeholder="Search posts, guides, deals..."></div>
+    <div class="chips">${chips}</div>
+    <div id="community-results">${spinner()}</div>`;
+}
+
+async function loadCommunity() {
+  const container = document.getElementById('community-results');
+  if (!container) return;
+  container.innerHTML = spinner();
+  await refreshMyLikes();
+  const q = (document.getElementById('community-search') || {}).value || '';
+  let posts;
+  if (communityActive === 'New' || communityActive === 'Popular') {
+    posts = await fetchPosts({ limit: 30, titleLike: q.trim() || undefined });
+    if (communityActive === 'Popular') posts = posts.slice().sort((a, b) => rankScore(b) - rankScore(a));
+  } else {
+    posts = await fetchPosts({ type: COMMUNITY_TYPE_MAP[communityActive], limit: 30, titleLike: q.trim() || undefined });
+  }
+  container.innerHTML = posts.length ? postListHtml(posts) : emptyState({
+    iconName: 'compass', title: 'Nothing here yet',
+    desc: q.trim() ? `No results for "${esc(q.trim())}" — try a different search once more people have posted.` : 'Be the first to create something in BloxdSpace.',
+    actionLabel: 'Create a post', actionHref: '#/create',
+  });
+  if (window.lucide) lucide.createIcons();
+}
+
+function coverFor(seed) {
+  const palettes = ['linear-gradient(120deg,#1d4e89,#f2a365)','linear-gradient(120deg,#3d348b,#7678ed)','linear-gradient(120deg,#0f3d2e,#7dcfb6)','linear-gradient(120deg,#5c2a2a,#e07a5f)','linear-gradient(120deg,#14213d,#fca311)'];
+  let n = 0; String(seed || '').split('').forEach(ch => { n += ch.charCodeAt(0); });
+  return palettes[n % palettes.length];
+}
+function personCardHtml(p) {
+  const name = p.display_name || p.username || 'Player';
+  const mine = currentUser && currentUser.id === p.id;
+  return `
+    <article class="person-card">
+      <div class="person-cover" style="background:${coverFor(p.username)}"></div>
+      ${avatarHtml(p, 56)}
+      <div class="person-name">${displayNameHtml(p, name)}</div>
+      <div class="person-sub">@${esc(p.username || '')}</div>
+      ${!mine && currentUser ? `<div class="person-actions">
+        <a class="msg" href="#/messages">Message</a>
+        <button type="button" class="follow-btn" data-user-id="${p.id}">Connect</button>
+      </div>` : ''}
+      ${isOwner() && !mine ? `<button type="button" class="btn-outline verify-btn" data-user-id="${p.id}" data-verified="${p.is_verified ? 'true' : 'false'}" style="margin-top:8px;">${p.is_verified ? 'Unverify' : 'Verify'}</button>` : ''}
+      <a class="person-view" href="#/u/${esc(p.username || '')}" style="display:block;margin-top:8px;font-size:12px;color:var(--ink-faint);">View Profile</a>
+    </article>`;
+}
+function pagePlayers() {
+  return `
+    ${pageHeader('Players', 'Members of BloxdSpace — search or browse the grid.')}
+    <div class="search-wrap">${icon('search')}<input type="search" id="players-search" class="search-input" placeholder="Search by BloxdSpace username"></div>
+    <div id="players-results">${spinner()}</div>`;
+}
+async function loadPlayersPage() { await runPlayerSearch((document.getElementById('players-search') || {}).value || ''); }
+async function runPlayerSearch(q) {
+  const container = document.getElementById('players-results');
+  if (!container) return;
+  container.innerHTML = spinner('Loading players…');
+  let query = sb.from('profiles').select('id,username,display_name,bio,bloxd_username,is_bloxd_username_public,avatar_url,role,created_at').order('created_at', { ascending: false }).limit(24);
+  if (q && q.trim()) query = query.ilike('username', `%${q.trim()}%`);
+  const { data } = await query;
+  const results = (data || []).filter(p => !blockedIds.has(p.id));
+  container.innerHTML = results.length
+    ? `<div class="people-grid">${results.map(personCardHtml).join('')}</div>`
+    : emptyState({ iconName: 'users', title: q ? `No members found for "${esc(q)}"` : 'No members yet', desc: 'Try a different search.' });
+  if (window.lucide) lucide.createIcons();
+}
+
+function pagePosts() {
+  return `${pageHeader('Posts', 'Text, screenshots, builds, questions, and everything else the community shares.')}<div id="posts-results">${spinner()}</div>`;
+}
+async function loadPostsPage() {
+  const box = document.getElementById('posts-results');
+  try {
+    await refreshMyLikes();
+    const posts = await fetchPosts({ limit: 30 });
+    if (box) box.innerHTML = posts.length ? postListHtml(posts) : emptyState({ iconName: 'file-text', title: 'Nothing here yet', desc: 'Be the first to create something in BloxdSpace.', actionLabel: 'Create a post', actionHref: '#/create' });
+  } catch (e) {
+    if (box) box.innerHTML = emptyState({ iconName: 'file-text', title: 'Could not load posts', desc: String(e && e.message || e) });
+  }
+  if (window.lucide) lucide.createIcons();
+}
+
+const guideCategories = ['Beginner', 'BedWars', 'Building', 'Survival', 'PvP', 'Redstone & code', 'Advanced'];
+let guideCategoryActive = '';
+function pageGuides() {
+  const chips = `<button class="chip ${!guideCategoryActive ? 'active' : ''}" data-guide-category="">All</button>` +
+    guideCategories.map(c => `<button class="chip ${guideCategoryActive === c ? 'active' : ''}" data-guide-category="${esc(c)}">${esc(c)}</button>`).join('');
+  return `${pageHeader('Guides', 'Community-written guides for every stage of Bloxd.io.')}<div class="chips">${chips}</div><div id="guides-results">${spinner()}</div>`;
+}
+async function loadGuidesPage() {
+  await refreshMyLikes();
+  const posts = await fetchPosts({ type: 'guide', limit: 30, category: guideCategoryActive || undefined });
+  document.getElementById('guides-results').innerHTML = posts.length ? postListHtml(posts) : emptyState({ iconName: 'book-open', title: guideCategoryActive ? `No ${guideCategoryActive} guides yet` : 'No guides published yet', desc: 'Share what you know — the first guide in any category starts here.', actionLabel: 'Write a guide', actionHref: '#/create' });
+  if (window.lucide) lucide.createIcons();
+}
+
+function pageDeals() {
+  return `
+    ${pageHeader('Deals', 'Post items you have, items you want, and trade offers.')}
+    <div class="notice wide">${icon('shield-alert')}<p>BloxdSpace does not verify members or guarantee trades. Never send anything first to someone you don't trust, and report any deal that feels off.</p></div>
+    <div id="deals-results">${spinner()}</div>`;
+}
+async function loadDealsPage() {
+  await refreshMyLikes();
+  const posts = await fetchPosts({ type: 'deal', limit: 30 });
+  document.getElementById('deals-results').innerHTML = posts.length ? postListHtml(posts) : emptyState({ iconName: 'handshake', title: 'No deals posted yet', desc: 'Be the first to create something in BloxdSpace.', actionLabel: 'Post a deal', actionHref: '#/create' });
+  if (window.lucide) lucide.createIcons();
+}
+
+function pageAds() {
+  return `
+    ${pageHeader('Ads', 'Official BloxdSpace ads. Only the site owner can post here.')}
+    ${isAdsOwner() ? `<a href="#/create-ad" class="empty-action" style="display:inline-flex;margin-bottom:16px;">${icon('plus')} Post an ad</a>` : ''}
+    <div id="ads-results">${spinner()}</div>`;
+}
+async function loadAdsPage() {
+  await refreshMyLikes();
+  const posts = await fetchPosts({ category: 'ad', limit: 30 });
+  const el = document.getElementById('ads-results');
+  if (el) el.innerHTML = posts.length ? postListHtml(posts) : emptyState({ iconName: 'megaphone', title: 'No ads yet', desc: isAdsOwner() ? 'Post the first official ad.' : 'Only the site owner can post ads.' });
+  if (window.lucide) lucide.createIcons();
+}
+
+const FEATURED_EVENTS = [
+  { tag: 'BEDWARS', title: 'BedWars Night Cup', when: 'Ends Friday, 8:00 PM', blurb: 'Team up and defend your bed.', prize: '1k iron', players: '8v8', art: 'linear-gradient(135deg,#7c2d12,#fb923c)' },
+  { tag: 'BUILD', title: 'Mega Build Contest', when: 'Ends Sunday, 4:00 PM', blurb: 'Build the coolest world you can.', prize: 'trophy', players: 'open', art: 'linear-gradient(135deg,#14532d,#86efac)' },
+  { tag: 'SKY WARS', title: 'Sky Islands Showdown', when: 'Ends Saturday, 6:00 PM', blurb: 'Last team standing on the islands.', prize: '500 gold', players: '4v4', art: 'linear-gradient(135deg,#1e3a8a,#38bdf8)' },
+  { tag: 'PVP', title: 'Arena Clash', when: 'Ends Tuesday, 7:00 PM', blurb: 'Clean arena fights.', prize: 'diamond', players: '1v1', art: 'linear-gradient(135deg,#4c0519,#fb7185)' },
+];
+function eventCardHtml(ev) {
+  return `<article class="event-card"><div class="event-cover"><div class="event-cover-art" style="--art:${ev.art || coverFor(ev.title)}"></div><span class="event-tag">${esc(ev.tag || 'EVENT')}</span></div>
+    <div class="event-body"><div class="event-when">${esc(ev.when || '')}</div><div class="event-name">${esc(ev.title)}</div><div class="event-blurb">${esc(ev.blurb || '')}</div>
+    <div class="event-foot"><div class="event-stats"><div class="event-stat"><label>Prize</label><span>${esc(ev.prize || 'fun')}</span></div><div class="event-stat"><label>Players</label><span>${esc(ev.players || 'open')}</span></div></div>
+    <a class="event-go" href="${ev.href || '#/create-event'}">${icon('arrow-up-right')}</a></div></div></article>`;
+}
+function pageEvents() {
+  return `${pageHeader('Events', 'Community cups and build contests. In-game prizes only.')}
+    <a href="#/create-event" class="empty-action" style="display:inline-flex;margin-bottom:16px;">${icon('plus')} Add an event</a>
+    <div id="events-results">${spinner()}</div>`;
+}
+async function loadEventsPage() {
+  const box = document.getElementById('events-results');
+  if (!box) return;
+  const posted = await fetchPosts({ category: 'event', limit: 12 });
+  const fromPosts = posted.map(p => ({ tag: 'COMMUNITY', title: p.title, when: timeAgo(p.created_at), blurb: p.body || '', prize: 'see post', players: 'open', href: '#/posts', art: coverFor(p.title) }));
+  box.innerHTML = `<div class="event-grid">${fromPosts.concat(FEATURED_EVENTS).map(eventCardHtml).join('')}</div>`;
+  if (window.lucide) lucide.createIcons();
+}
+
+function pageVideos() {
+  return `${pageHeader('Videos', 'YouTube links on BloxdSpace. Upload and watch on YemVideo.')}
+    <div class="video-actions" style="margin-bottom:16px;">
+      <button type="button" class="yem-btn open-yemvideo">${icon('play')} Watch on YemVideo</button>
+      <button type="button" class="yem-btn open-yemvideo">${icon('upload')} Add a video on YemVideo</button>
+      <a href="#/create-youtube" class="btn-outline">Post a YouTube link</a>
+    </div>
+    <div id="videos-results">${spinner()}</div>`;
+}
+async function loadVideosPage() {
+  await refreshMyLikes();
+  const posts = await fetchPosts({ limit: 40 });
+  const vids = posts.filter(p => videoSource(p) || p.category === 'video');
+  const box = document.getElementById('videos-results');
+  if (box) box.innerHTML = vids.length ? postListHtml(vids) : emptyState({ iconName: 'play', title: 'No videos yet', desc: 'Post a YouTube link, or open YemVideo to upload.', actionLabel: 'Post a YouTube link', actionHref: '#/create-youtube' });
+  if (window.lucide) lucide.createIcons();
+}
+
+const leaderboardTabs = ['Most active', 'Most liked posts', 'Top guides'];
+let leaderboardActive = 'Most active';
+
+function pageLeaderboards() {
+  const chips = leaderboardTabs.map(t => `<button class="chip ${t === leaderboardActive ? 'active' : ''}" data-lb-filter="${t}">${t}</button>`).join('');
+  return `
+    ${pageHeader('Leaderboards', 'Ranked from real BloxdSpace activity only — nothing here is simulated.')}
+    <div class="chips">${chips}</div>
+    <div id="lb-results">${spinner()}</div>`;
+}
+async function loadLeaderboards() {
+  const container = document.getElementById('lb-results');
+  if (!container) return;
+  container.innerHTML = spinner();
+  let rows = [];
+  if (leaderboardActive === 'Most active') {
+    const { data } = await sb.from('leaderboard_most_active').select('*');
+    rows = (data || []).filter(r => !blockedIds.has(r.id)).map(r => ({ label: r.display_name || r.username, sub: '@' + r.username, value: r.post_count + ' posts' }));
+  } else if (leaderboardActive === 'Most liked posts') {
+    const { data } = await sb.from('leaderboard_most_liked').select('*');
+    rows = (data || []).filter(r => !blockedIds.has(r.id)).map(r => ({ label: r.display_name || r.username, sub: '@' + r.username, value: r.like_count + ' likes' }));
+  } else {
+    const { data } = await sb.from('leaderboard_top_guides').select('*');
+    rows = (data || []).map(r => ({ label: r.title, sub: 'by @' + r.author_username, value: r.like_count + ' likes' }));
+  }
+  container.innerHTML = rows.length ? rows.map((r, i) => `
+    <div class="mod-row"><div style="display:flex;justify-content:space-between;"><span>#${i + 1} ${esc(r.label)}</span><span style="color:var(--ink-faint)">${esc(r.value)}</span></div><div class="post-time">${esc(r.sub)}</div></div>
+  `).join('') : emptyState({ iconName: 'trophy', title: 'Not enough activity yet', desc: 'This board fills in once members start posting, liking, and helping each other out.' });
+  if (window.lucide) lucide.createIcons();
+}
+
+function pageNotifications() {
+  const composer = isCreator() ? `
+    <form class="card" id="announcement-form" style="padding:16px;display:flex;flex-direction:column;margin-bottom:24px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+        ${icon('megaphone')}
+        <span style="font-weight:600;font-size:14px;">Post an announcement</span>
+        <span class="field-hint" style="margin:0;">Visible to every member</span>
+      </div>
+      <div class="field"><label for="a-title">Title</label><input id="a-title" class="input" required placeholder="What's new in BloxdSpace"></div>
+      <div class="field"><label for="a-body">Message</label><textarea id="a-body" class="textarea" rows="3" placeholder="Write your announcement"></textarea></div>
+      <div id="announcement-result"></div>
+      <button type="submit" class="btn-primary" style="align-self:flex-start;">Post announcement</button>
+    </form>` : '';
+  return `${pageHeader('Notifications')}${composer}<div id="notif-results">${spinner()}</div>`;
+}
+async function loadNotifications() {
+  const container = document.getElementById('notif-results');
+  if (!container) return;
+  const { data: announcements } = await sb.from('announcements')
+    .select('id,title,body,created_at,profiles!announcements_author_id_fkey(username,display_name,avatar_url)')
+    .order('created_at', { ascending: false }).limit(10);
+  const announcementItems = (announcements || []).map(a => ({
+    kind: 'announcement', created_at: a.created_at, id: 'a-' + a.id,
+    html: `<div class="mod-row" style="border-left:2px solid var(--accent);">
+      <div style="display:flex;align-items:center;gap:8px;">${icon('megaphone')}<strong>${esc(a.title)}</strong></div>
+      ${a.body ? `<div class="post-body" style="margin-top:6px;">${esc(a.body)}</div>` : ''}
+      <div class="post-time" style="margin-top:6px;">BloxdSpace · ${timeAgo(a.created_at)}</div>
+    </div>`,
+  }));
+
+  if (!currentUser) {
+    container.innerHTML = announcementItems.length
+      ? announcementItems.map(i => i.html).join('') + `<div style="margin-top:16px;">${emptyState({ iconName: 'bell', title: 'Log in to see personal notifications', desc: 'Likes, comments, replies, and follows are personal to your account.', actionLabel: 'Log in', actionHref: '#/login' })}</div>`
+      : emptyState({ iconName: 'bell', title: 'Log in to see notifications', desc: 'Notifications are personal to your account.', actionLabel: 'Log in', actionHref: '#/login' });
+    if (window.lucide) lucide.createIcons();
+    return;
+  }
+
+  container.innerHTML = spinner();
+  const { data } = await sb.from('notifications')
+    .select('id,type,read_at,created_at,actor:profiles!notifications_source_user_id_fkey(username,display_name,avatar_url)')
+    .eq('user_id', currentUser.id).order('created_at', { ascending: false }).limit(30);
+  const rows = data || [];
+  const verbs = { like: 'liked your post', comment: 'commented on your post', reply: 'replied to your comment', follow: 'started following you' };
+  const personalItems = rows.map(n => {
+    const actor = n.actor || {};
+    return {
+      kind: 'personal', created_at: n.created_at, id: n.id,
+      html: `<div class="mod-row" style="${n.read_at ? '' : 'border-left:2px solid var(--moss);'}">
+        <div style="display:flex;align-items:center;gap:8px;">${avatarHtml(actor, 22)}<span><strong>${esc(actor.display_name || actor.username || 'Someone')}</strong> ${esc(verbs[n.type] || n.type)}</span></div>
+        <div class="post-time" style="margin-top:4px;">${timeAgo(n.created_at)}</div>
+      </div>`,
+    };
+  });
+
+  const merged = [...announcementItems, ...personalItems].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  container.innerHTML = merged.length ? merged.map(i => i.html).join('') : emptyState({ iconName: 'bell', title: "You're all caught up", desc: 'Likes, comments, replies, mentions, follows, and messages will show up here.', tone: 'positive' });
+  if (window.lucide) lucide.createIcons();
+  const unreadIds = rows.filter(n => !n.read_at).map(n => n.id);
+  if (unreadIds.length) await sb.from('notifications').update({ read_at: new Date().toISOString() }).in('id', unreadIds);
+}
+
+const chatChannelIcons = { general: 'hash', bedwars: 'swords', builds: 'box' };
+let chatActive = 'general';
+let lastRenderedMsgAuthor = null;
+let lastRenderedMsgTime = 0;
+const CHAT_EMOJIS = ['😀','😂','😍','👍','🔥','🎉','😢','😮','🙏','💯','😎','🥳','❤️','👀','🤔','😅','🙌','✅','🎮','🧱','⚔️','🏆','👋','💬'];
+
+function pageChat() {
+  const list = chatChannelsCache.length ? chatChannelsCache.map(c => `
+    <button class="channel-btn ${c.slug === chatActive ? 'active' : ''}" data-channel="${c.slug}">
+      <span class="channel-icon-circle">${icon(chatChannelIcons[c.slug] || 'hash')}</span>
+      <span><span style="display:block;">${esc(c.slug)}</span><span class="channel-desc">${esc(c.description || '')}</span></span>
+    </button>`).join('') : spinner('Loading channels…');
+  const active = chatChannelsCache.find(c => c.slug === chatActive) || {};
+  return `
+    ${pageHeader('Chat', 'Public channels for the BloxdSpace community.')}
+    <div class="chat-wrap">
+      <div class="channel-list">${list}</div>
+      <div class="chat-panel">
+        <div class="chat-header" id="chat-header">
+          <div class="chat-header-icon">${icon(chatChannelIcons[chatActive] || 'hash')}</div>
+          <div>
+            <div class="chat-header-title">#${esc(chatActive)}</div>
+            <div class="chat-header-desc">${esc(active.description || '')}</div>
+          </div>
+          <span class="chat-online" id="chat-online" style="display:none;"><span class="chat-online-dot"></span><span id="chat-online-count">0 online</span></span>
+        </div>
+        <div class="chat-messages" id="chat-messages">${spinner()}</div>
+        <form class="chat-composer" id="chat-form">
+          <div class="chat-input-wrap">
+            <button type="button" class="emoji-btn" data-emoji-target="chat-input" aria-label="Insert emoji" ${currentUser ? '' : 'disabled'}>${icon('smile')}</button>
+            <input type="text" id="chat-input" placeholder="${currentUser ? 'Message #' + chatActive : 'Sign in to send a message'}" ${currentUser ? '' : 'disabled'} maxlength="500" autocomplete="off">
+            <button type="button" class="emoji-btn" id="chat-image-btn" aria-label="Attach image" ${currentUser ? '' : 'disabled'}>${icon('image')}</button>
+            <input type="file" id="chat-image-input" accept="image/*" style="display:none;">
+          </div>
+          <button type="submit" class="chat-send-btn" ${currentUser ? '' : 'disabled'} aria-label="Send">${icon('send')}</button>
+        </form>
+        ${currentUser ? '' : `<p class="chat-note">${icon('lock')}<a href="#/login" style="color:var(--ink)">Log in</a> to send messages.</p>`}
+      </div>
+    </div>`;
+}
+
+function chatMsgHtml(m, grouped) {
+  const author = m.profiles || {};
+  const mine = currentUser && m.author_id === currentUser.id;
+  const img = (m.media_urls && m.media_urls[0]) ? `<img class="post-media" style="border-radius:12px;max-width:220px;${m.body ? 'margin-top:6px;' : ''}" src="${esc(m.media_urls[0])}" alt="">` : '';
+  const bubble = `<div class="chat-bubble ${mine ? 'mine' : 'theirs'}">${m.body ? esc(m.body) : ''}${img}</div>`;
+  const time = `<div class="chat-msg-time">${timeAgo(m.created_at)}</div>`;
+  if (mine) {
+    return `<div class="chat-msg-row mine"><div class="chat-msg-col">${bubble}${time}</div></div>`;
+  }
+  return `<div class="chat-msg-row theirs">
+    <div class="chat-msg-avatar">${grouped ? '' : avatarHtml(author, 26)}</div>
+    <div class="chat-msg-col">
+      ${grouped ? '' : `<div class="chat-msg-author">${esc(author.display_name || author.username || 'Unknown')}</div>`}
+      ${bubble}${time}
+    </div>
+  </div>`;
+}
+
+function shouldGroup(authorId, createdAt) {
+  const grouped = authorId === lastRenderedMsgAuthor && (new Date(createdAt).getTime() - lastRenderedMsgTime) < 5 * 60 * 1000;
+  lastRenderedMsgAuthor = authorId;
+  lastRenderedMsgTime = new Date(createdAt).getTime();
+  return grouped;
+}
+
+function toggleEmojiPopover(anchorBtn, inputId) {
+  const existing = document.getElementById('emoji-popover');
+  if (existing) { existing.remove(); return; }
+  const pop = document.createElement('div');
+  pop.id = 'emoji-popover';
+  pop.className = 'emoji-popover-fixed';
+  pop.dataset.targetInput = inputId || 'chat-input';
+  pop.innerHTML = CHAT_EMOJIS.map(e => `<button type="button" data-emoji="${e}">${e}</button>`).join('');
+  document.body.appendChild(pop);
+  const rect = anchorBtn.getBoundingClientRect();
+  const popRect = pop.getBoundingClientRect();
+  let left = rect.left;
+  if (left + popRect.width > window.innerWidth - 8) left = window.innerWidth - popRect.width - 8;
+  pop.style.left = Math.max(8, left) + 'px';
+  pop.style.top = Math.max(8, rect.top - popRect.height - 8) + 'px';
+}
+
+async function fetchMessages(channelId) {
+  const { data } = await sb.from('chat_messages')
+    .select('id,body,media_urls,created_at,author_id,deleted_at,profiles!chat_messages_author_id_fkey(username,display_name,avatar_url)')
+    .eq('channel_id', channelId).is('deleted_at', null)
+    .order('created_at', { ascending: true }).limit(50);
+  return (data || []).filter(m => !blockedIds.has(m.author_id));
+}
+
+function updateOnlineCount(n) {
+  const wrap = document.getElementById('chat-online');
+  const countEl = document.getElementById('chat-online-count');
+  if (!wrap || !countEl) return;
+  wrap.style.display = 'flex';
+  countEl.textContent = n + (n === 1 ? ' online' : ' online');
+}
+
+function subscribeChannel(channelId) {
+  if (chatRealtimeChannel) { sb.removeChannel(chatRealtimeChannel); chatRealtimeChannel = null; }
+  chatRealtimeChannel = sb.channel('chat-' + channelId, { config: { presence: { key: currentUser ? currentUser.id : 'guest-' + Math.random().toString(36).slice(2) } } })
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `channel_id=eq.${channelId}` }, async (payload) => {
+      const msg = payload.new;
+      if (blockedIds.has(msg.author_id)) return;
+      const messagesEl = document.getElementById('chat-messages');
+      if (!messagesEl) return;
+      const profile = await getProfileCached(msg.author_id);
+      const emptyEl = messagesEl.querySelector('.chat-empty');
+      if (emptyEl) { messagesEl.innerHTML = ''; lastRenderedMsgAuthor = null; }
+      const grouped = shouldGroup(msg.author_id, msg.created_at);
+      messagesEl.insertAdjacentHTML('beforeend', chatMsgHtml({ ...msg, profiles: profile }, grouped));
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+      if (window.lucide) lucide.createIcons();
+    })
+    .on('presence', { event: 'sync' }, () => {
+      const state = chatRealtimeChannel.presenceState();
+      updateOnlineCount(Object.keys(state).length);
+    })
+    .subscribe(async (status) => {
+      if (status === 'SUBSCRIBED' && currentUser) {
+        await chatRealtimeChannel.track({ user_id: currentUser.id, online_at: new Date().toISOString() });
+      }
+    });
+}
+
+async function loadChat() {
+  if (!chatChannelsCache.length) {
+    const { data } = await sb.from('chat_channels').select('*').order('name');
+    chatChannelsCache = data || [];
+    if (!chatChannelsCache.find(c => c.slug === chatActive)) chatActive = (chatChannelsCache[0] || {}).slug || 'general';
+  }
+  document.getElementById('page').innerHTML = pageChat();
+  if (window.lucide) lucide.createIcons();
+  const channel = chatChannelsCache.find(c => c.slug === chatActive);
+  const messagesEl = document.getElementById('chat-messages');
+  if (!channel || !messagesEl) return;
+  messagesEl.innerHTML = spinner();
+  const messages = await fetchMessages(channel.id);
+  lastRenderedMsgAuthor = null;
+  lastRenderedMsgTime = 0;
+  messagesEl.innerHTML = messages.length
+    ? messages.map(m => chatMsgHtml(m, shouldGroup(m.author_id, m.created_at))).join('')
+    : `<div class="chat-empty">${icon('message-square-off')}<p class="empty-title">Nothing here yet</p><p class="empty-desc">Be the first to say something in #${esc(chatActive)}.</p></div>`;
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+  if (window.lucide) lucide.createIcons();
+  subscribeChannel(channel.id);
+}
+
+const createTypes = [
+  { key: 'post', label: 'Post', icon: 'file-text' },
+  { key: 'guide', label: 'Guide', icon: 'book-open' },
+  { key: 'deal', label: 'Deal', icon: 'handshake' },
+  { key: 'ad', label: 'Ad', icon: 'megaphone' },
+  { key: 'event', label: 'Event', icon: 'calendar' },
+  { key: 'image', label: 'Upload image', icon: 'image' },
+  { key: 'youtube', label: 'YouTube link', icon: 'youtube' },
+  { key: 'yemvideo', label: 'Add a video', icon: 'video' },
+];
+let createActive = 'post';
+
+function pageCreate() {
+  if (!currentUser) {
+    return pageHeader('Create', 'Share something with the BloxdSpace community.') + emptyState({ iconName: 'lock', title: 'Log in to create something', desc: 'You need a BloxdSpace account to post, write a guide, or list a deal.', actionLabel: 'Log in', actionHref: '#/login' });
+  }
+  const types = createTypes
+    .filter(t => t.key !== 'ad' || isAdsOwner())
+    .map(t => `<button class="type-item ${t.key === createActive ? 'active' : ''}" data-create-type="${t.key}">${icon(t.icon)}${t.label}</button>`).join('');
+  if (createActive === 'ad' && !isAdsOwner()) createActive = 'post';
+  if (createActive === 'yemvideo') {
+    return `
+      ${pageHeader('Add a video', 'Videos are uploaded and watched on YemVideo.')}
+      <div class="type-grid">${types}</div>
+      <div class="card" style="padding:20px;">
+        <p class="page-desc">Open YemVideo to upload. Then come back and post a YouTube link if you also want it here.</p>
+        <button type="button" class="yem-btn open-yemvideo" style="margin-top:12px;">${icon('upload')} Open YemVideo</button>
+      </div>`;
+  }
+  return `
+    ${pageHeader('Create', 'Share something with the BloxdSpace community.')}
+    <div class="type-grid">${types}</div>
+    <form class="card" id="create-form" style="padding:20px;display:flex;flex-direction:column;">
+      <div class="field">
+        <label for="create-title">Title</label>
+        <input id="create-title" class="input" required placeholder="${createActive === 'deal' ? 'e.g. Trading diamond sword for iron armor' : createActive === 'ad' ? 'e.g. Looking for BedWars team tonight' : createActive === 'youtube' ? 'e.g. My BedWars montage' : 'Give it a title'}">
+      </div>
+      <div class="field">
+        <label for="create-body">${createActive === 'image' ? 'Caption' : createActive === 'youtube' ? 'Description (optional)' : 'Details'}</label>
+        <textarea id="create-body" class="textarea" rows="5" ${createActive === 'image' || createActive === 'youtube' ? '' : 'required'} placeholder="Write in your own words — no placeholder stats or fake claims."></textarea>
+      </div>
+      ${createActive === 'guide' ? `<div class="field"><label for="create-category">Category</label><select id="create-category" class="input"><option value="">General</option>${guideCategories.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('')}</select></div>` : ''}
+      ${createActive === 'youtube' ? `<div class="field"><label for="create-youtube">YouTube link</label><input id="create-youtube" class="input" required placeholder="https://www.youtube.com/watch?v=..."></div>` : ''}
+      ${createActive === 'image' || createActive === 'ad' ? `<div class="field"><label for="create-image">${createActive === 'ad' ? 'Image (optional)' : 'Image'}</label><input id="create-image" type="file" accept="image/*" class="input" ${createActive === 'image' ? 'required' : ''}></div>` : ''}
+      <div id="create-result"></div>
+      <button type="submit" class="btn-primary" id="create-submit" style="align-self:flex-start;">Publish</button>
+    </form>`;
+}
+
+function pageProfile() {
+  if (!currentUser) {
+    return `${pageHeader('Profile')}
+      <div class="profile-card">
+        <div class="avatar-circle">${icon('user')}</div>
+        <div><p class="empty-title">You're not signed in</p><p class="empty-desc" style="margin-top:4px;">Create a BloxdSpace account to set a username, bio, and Bloxd username, and to start posting.</p></div>
+        <div class="profile-actions"><a href="#/login" class="btn-outline">Log in</a><a href="#/register" class="btn-primary">Create account</a></div>
+      </div>`;
+  }
+  const p = currentProfile || {};
+  return `
+    ${pageHeader('Profile')}
+    <div class="profile-card">
+      ${avatarHtml(p, 80)}
+      <div>
+        <p class="empty-title">${esc(p.display_name || p.username || 'Player')}</p>
+        <p class="empty-desc" style="margin-top:4px;">@${esc(p.username || '')}${p.bio ? ' · ' + esc(p.bio) : ''}</p>
+      </div>
+      <div class="profile-actions">
+        <a href="#/settings" class="btn-outline">Edit profile</a>
+        <button class="btn-outline" id="logout-btn" type="button">Log out</button>
+      </div>
+    </div>
+    <div id="profile-stats" class="stat-grid">
+      <div class="stat-item">${icon('file-text')}<span>Posts — …</span></div>
+      <div class="stat-item">${icon('heart')}<span>Likes received — …</span></div>
+      <div class="stat-item">${icon('calendar')}<span>Joined ${p.created_at ? timeAgo(p.created_at) : '…'}</span></div>
+    </div>
+    <div style="margin-top:32px;">
+      <h2 class="section-title">Your posts</h2>
+      <div id="profile-posts">${spinner()}</div>
+    </div>`;
+}
+async function loadProfilePage() {
+  if (!currentUser) return;
+  await refreshMyLikes();
+  const posts = await fetchPosts({ authorId: currentUser.id, limit: 20 });
+  const postsEl = document.getElementById('profile-posts');
+  if (postsEl) postsEl.innerHTML = posts.length ? postListHtml(posts) : emptyState({ iconName: 'file-text', title: "You haven't posted yet", desc: 'Share something with the community.', actionLabel: 'Create a post', actionHref: '#/create' });
+  const totalLikes = posts.reduce((sum, p) => sum + ((p.likes && p.likes[0] && p.likes[0].count) || 0), 0);
+  const statEl = document.getElementById('profile-stats');
+  if (statEl) statEl.innerHTML = `
+    <div class="stat-item">${icon('file-text')}<span>Posts — ${posts.length}</span></div>
+    <div class="stat-item">${icon('heart')}<span>Likes received — ${totalLikes}</span></div>
+    <div class="stat-item">${icon('calendar')}<span>Joined ${currentProfile && currentProfile.created_at ? timeAgo(currentProfile.created_at) : ''}</span></div>`;
+  if (window.lucide) lucide.createIcons();
+}
+
+const settingsSections = [
+  { title: 'Account', rows: [{ label: 'Email address', hint: currentUserEmailHint }] },
+];
+function currentUserEmailHint() { return currentUser ? currentUser.email : ''; }
+
+function pageSettings() {
+  if (!currentUser) {
+    return `${pageHeader('Settings')}${emptyState({ iconName: 'lock', title: 'Log in to manage settings', desc: 'Settings are tied to your BloxdSpace account.', actionLabel: 'Log in', actionHref: '#/login' })}`;
+  }
+  const p = currentProfile || {};
+  const isMod = p.role === 'mod' || p.role === 'admin';
+  return `
+    ${pageHeader('Settings')}
+    <div class="settings-section">
+      <h2>Account</h2>
+      <div class="settings-card"><div class="settings-row"><div><p class="settings-row-label">Email address</p><p class="settings-row-hint">${esc(currentUser.email || '')}</p></div></div></div>
+    </div>
+
+    <div class="settings-section">
+      <h2>Profile</h2>
+      <form class="card" id="settings-profile-form" style="padding:16px;display:flex;flex-direction:column;">
+        <div class="field" style="display:flex;align-items:center;gap:12px;">${avatarHtml(p, 56)}<div style="flex:1;"><label for="s-avatar">Avatar</label><input id="s-avatar" type="file" accept="image/*" class="input"></div></div>
+        <div class="field"><label for="s-display-name">Display name</label><input id="s-display-name" class="input" value="${esc(p.display_name || '')}"></div>
+        <div class="field"><label for="s-bio">Bio</label><textarea id="s-bio" class="textarea" rows="3">${esc(p.bio || '')}</textarea></div>
+        <div class="field"><label for="s-bloxd">Bloxd username</label><input id="s-bloxd" class="input" value="${esc(p.bloxd_username || '')}"></div>
+        <div class="field" style="display:flex;align-items:center;gap:8px;"><input type="checkbox" id="s-bloxd-public" ${p.is_bloxd_username_public ? 'checked' : ''}><label for="s-bloxd-public" style="margin:0;">Show Bloxd username publicly</label></div>
+        <div id="settings-profile-result"></div>
+        <button type="submit" class="btn-primary" style="align-self:flex-start;">Save changes</button>
+      </form>
+    </div>
+
+    <div class="settings-section">
+      <h2>Security</h2>
+      <form class="card" id="settings-password-form" style="padding:16px;display:flex;flex-direction:column;">
+        <div class="field"><label for="s-new-password">New password</label><input id="s-new-password" type="password" class="input" minlength="8" placeholder="At least 8 characters"></div>
+        <div id="settings-password-result"></div>
+        <button type="submit" class="btn-primary" style="align-self:flex-start;">Update password</button>
+      </form>
+    </div>
+
+    <div class="settings-section">
+      <h2>Saved posts</h2>
+      <div id="settings-saved">${spinner()}</div>
+    </div>
+
+    <div class="settings-section">
+      <h2>Blocked users</h2>
+      <div id="settings-blocked">${spinner()}</div>
+    </div>
+
+    ${isMod ? `
+    <div class="settings-section">
+      <h2>Moderation queue</h2>
+      <div id="settings-mod">${spinner()}</div>
+    </div>
+    <div class="settings-section">
+      <h2>Manage a user</h2>
+      <div class="search-wrap">${icon('search')}<input type="search" id="mod-user-search" class="search-input" placeholder="Search by username to ban or unban"></div>
+      <div id="mod-user-results"></div>
+    </div>
+    <div class="settings-section">
+      <h2>Moderation log</h2>
+      <div id="settings-mod-log">${spinner()}</div>
+    </div>` : ''}
+
+    <div class="settings-section">
+      <h2>Danger zone</h2>
+      <div class="settings-card">
+        <div class="settings-row danger">
+          <div><p class="settings-row-label">Delete account</p><p class="settings-row-hint">Permanently remove your account and data</p></div>
+          <button id="delete-account-btn" type="button">Delete</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function resolveReportTargetUser(targetType, targetId) {
+  if (targetType === 'user') return targetId;
+  const table = targetType === 'post' ? 'posts' : targetType === 'comment' ? 'comments' : 'chat_messages';
+  const { data } = await sb.from(table).select('author_id').eq('id', targetId).maybeSingle();
+  return data ? data.author_id : null;
+}
+
+async function runModUserSearch(q) {
+  const el = document.getElementById('mod-user-results');
+  if (!el) return;
+  if (!q) { el.innerHTML = ''; return; }
+  const { data } = await sb.from('profiles').select('id,username,display_name,is_banned').ilike('username', `%${q}%`).limit(10);
+  el.innerHTML = (data && data.length) ? `<div class="settings-card">${data.map(u => `
+    <div class="settings-row">
+      <span class="settings-row-label">${esc(u.display_name || u.username)}${u.is_banned ? ' <span style="color:var(--accent);font-size:11px;">(banned)</span>' : ''}</span>
+      <button class="${u.is_banned ? 'unban-user-btn' : 'ban-user-direct-btn'}" type="button" data-user-id="${u.id}">${u.is_banned ? 'Unban' : 'Ban'}</button>
+    </div>`).join('')}</div>` : `<p class="empty-desc" style="text-align:left;max-width:none;">No users found.</p>`;
+}
+
+async function loadSettingsPage() {
+  if (!currentUser) return;
+  const blockedEl = document.getElementById('settings-blocked');
+  if (blockedEl) {
+    const { data: blocks } = await sb.from('blocks').select('blocked_id, profiles!blocks_blocked_id_fkey(username,display_name)').eq('blocker_id', currentUser.id);
+    blockedEl.innerHTML = (blocks && blocks.length) ? `<div class="settings-card">${blocks.map(b => `
+      <div class="settings-row"><span class="settings-row-label">${esc((b.profiles && (b.profiles.display_name || b.profiles.username)) || 'Unknown')}</span><button class="unblock-btn" type="button" data-user-id="${b.blocked_id}">Unblock</button></div>
+    `).join('')}</div>` : `<p class="empty-desc" style="text-align:left;max-width:none;">People you've blocked will be listed here.</p>`;
+  }
+  const savedEl = document.getElementById('settings-saved');
+  if (savedEl) {
+    const { data: saves } = await sb.from('saved_posts').select('post_id,posts!saved_posts_post_id_fkey(id,title)').eq('user_id', currentUser.id).order('created_at', { ascending: false }).limit(20);
+    savedEl.innerHTML = (saves && saves.length) ? `<div class="settings-card">${saves.filter(s => s.posts).map(s => `
+      <div class="settings-row"><a href="#/p/${s.posts.id}" class="settings-row-label" style="color:var(--ink);">${esc(s.posts.title)}</a></div>
+    `).join('')}</div>` : `<p class="empty-desc" style="text-align:left;max-width:none;">Posts you save will show up here.</p>`;
+  }
+  if (currentProfile && (currentProfile.role === 'mod' || currentProfile.role === 'admin')) {
+    const modEl = document.getElementById('settings-mod');
+    if (modEl) {
+      const { data: reports } = await sb.from('reports').select('id,target_type,target_id,reason,status,created_at').eq('status', 'open').order('created_at', { ascending: false }).limit(20);
+      modEl.innerHTML = (reports && reports.length) ? reports.map(r => `
+        <div class="mod-row">
+          <div><strong>${esc(r.target_type)}</strong> reported — ${esc(r.reason)}</div>
+          <div class="post-time">${timeAgo(r.created_at)}</div>
+          <div class="mod-row-actions">
+            <button class="btn-outline remove-content-btn" type="button" data-target-type="${r.target_type}" data-target-id="${r.target_id}" data-report-id="${r.id}">Remove content</button>
+            <button class="btn-outline warn-user-btn" type="button" data-target-type="${r.target_type}" data-target-id="${r.target_id}" data-report-id="${r.id}">Warn user</button>
+            <button class="btn-outline ban-user-btn" type="button" data-target-type="${r.target_type}" data-target-id="${r.target_id}" data-report-id="${r.id}">Ban user</button>
+            <button class="btn-outline resolve-report-btn" type="button" data-report-id="${r.id}">Mark resolved</button>
+          </div>
+        </div>`).join('') : `<p class="empty-desc" style="text-align:left;max-width:none;">No open reports.</p>`;
+    }
+    const logEl = document.getElementById('settings-mod-log');
+    if (logEl) {
+      const { data: log } = await sb.from('moderation_actions')
+        .select('id,action,reason,created_at,moderator:profiles!moderation_actions_moderator_id_fkey(username),target:profiles!moderation_actions_target_user_id_fkey(username)')
+        .order('created_at', { ascending: false }).limit(30);
+      logEl.innerHTML = (log && log.length) ? log.map(l => `
+        <div class="mod-row">
+          <div><strong>@${esc((l.moderator && l.moderator.username) || '?')}</strong> — ${esc(l.action)}${l.target ? ' → @' + esc(l.target.username) : ''}</div>
+          ${l.reason ? `<div class="post-time">${esc(l.reason)}</div>` : ''}
+          <div class="post-time">${timeAgo(l.created_at)}</div>
+        </div>`).join('') : `<p class="empty-desc" style="text-align:left;max-width:none;">No moderation actions yet.</p>`;
+    }
+  }
+  if (window.lucide) lucide.createIcons();
+}
+
+/* ---------------- public profile ---------------- */
+
+function pageUserProfile() {
+  return `<div id="user-profile-content">${spinner()}</div>`;
+}
+async function loadUserProfilePage(username) {
+  const container = document.getElementById('user-profile-content');
+  if (!container) return;
+  const { data: p } = await sb.from('profiles').select('*').eq('username', username).maybeSingle();
+  if (!p) { container.innerHTML = pageHeader('Player not found') + emptyState({ iconName: 'user-x', title: 'Player not found', desc: `No BloxdSpace member goes by @${esc(username)}.` }); return; }
+  if (blockedIds.has(p.id)) { container.innerHTML = pageHeader('Unavailable') + emptyState({ iconName: 'user-x', title: 'Unavailable', desc: 'You have blocked this member.' }); return; }
+  const isMe = currentUser && currentUser.id === p.id;
+  await refreshMyLikes();
+  const [followerRes, followingRes, iFollowRes, posts] = await Promise.all([
+    sb.from('follows').select('follower_id', { count: 'exact', head: true }).eq('following_id', p.id),
+    sb.from('follows').select('following_id', { count: 'exact', head: true }).eq('follower_id', p.id),
+    currentUser ? sb.from('follows').select('follower_id').eq('follower_id', currentUser.id).eq('following_id', p.id).maybeSingle() : Promise.resolve({ data: null }),
+    fetchPosts({ authorId: p.id, limit: 20 }),
+  ]);
+  const iFollow = !!iFollowRes.data;
+  container.innerHTML = `
+    ${pageHeader(p.display_name || p.username)}
+    <div class="profile-card">
+      ${avatarHtml(p, 80)}
+      <div>
+        <p class="empty-title">${esc(p.display_name || p.username)}</p>
+        <p class="empty-desc" style="margin-top:4px;">@${esc(p.username)}${p.bio ? ' · ' + esc(p.bio) : ''}</p>
+        ${p.is_bloxd_username_public && p.bloxd_username ? `<p class="field-hint" style="margin-top:6px;">Bloxd username: ${esc(p.bloxd_username)}</p>` : ''}
+      </div>
+      <div class="profile-actions">
+        ${isMe ? `<a href="#/settings" class="btn-outline">Edit profile</a>` : ''}
+        ${!isMe && currentUser ? `<button class="btn-outline follow-btn" type="button" data-user-id="${p.id}" data-following="${iFollow}">${iFollow ? 'Following' : 'Follow'}</button>` : ''}
+        ${!isMe && currentUser ? `<a href="#/messages/${p.id}" class="btn-primary">Message</a>` : ''}
+        ${!isMe && currentUser ? `<button class="icon-btn block-btn" data-user-id="${p.id}">${icon('user-x')}<span>Block</span></button>` : ''}
+      </div>
+    </div>
+    <div class="stat-grid">
+      <div class="stat-item">${icon('file-text')}<span>Posts — ${posts.length}</span></div>
+      <div class="stat-item">${icon('users')}<span>Followers — ${followerRes.count || 0}</span></div>
+      <div class="stat-item">${icon('user-plus')}<span>Following — ${followingRes.count || 0}</span></div>
+    </div>
+    <div style="margin-top:32px;">
+      <h2 class="section-title">Posts</h2>
+      ${posts.length ? postListHtml(posts) : emptyState({ iconName: 'file-text', title: 'No posts yet', desc: 'Nothing shared yet.' })}
+    </div>`;
+  if (window.lucide) lucide.createIcons();
+}
+
+/* ---------------- single post (for sharing) ---------------- */
+
+function pagePostDetail() {
+  return `<div id="post-detail-content">${spinner()}</div>`;
+}
+async function loadPostDetail(postId) {
+  const container = document.getElementById('post-detail-content');
+  if (!container) return;
+  await refreshMyLikes();
+  const { data } = await sb.from('posts')
+    .select('id,title,body,type,media_urls,category,created_at,is_completed,author_id,profiles!posts_author_id_fkey(username,display_name,avatar_url),likes(count),comments(count)')
+    .eq('id', postId).eq('is_removed', false).maybeSingle();
+  if (!data || blockedIds.has(data.author_id)) { container.innerHTML = pageHeader('Post') + emptyState({ iconName: 'file-text', title: 'Post not found', desc: 'This post may have been removed.' }); return; }
+  container.innerHTML = pageHeader('Post') + postListHtml([data]);
+  if (window.lucide) lucide.createIcons();
+  await onCommentToggle(postId);
+}
+
+function pageLogin() {
+  return `
+    <h1 style="font-size:20px;font-weight:600;">Log in</h1>
+    <p style="margin-top:4px;font-size:14px;color:var(--ink-muted);">Welcome back to BloxdSpace.</p>
+    <form id="login-form" style="margin-top:20px;">
+      <div class="field"><label for="login-email">Email</label><input id="login-email" type="email" class="input" required autocomplete="email"></div>
+      <div class="field">
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+          <label for="login-password" style="margin:0;">Password</label>
+          <a href="#/reset-password" style="font-size:12px;color:var(--ink-muted);">Forgot password?</a>
+        </div>
+        <input id="login-password" type="password" class="input" required autocomplete="current-password">
+      </div>
+      <div id="login-result"></div>
+      <button type="submit" class="btn-primary" style="width:100%;">Log in</button>
+    </form>
+    <p style="margin-top:20px;text-align:center;font-size:14px;color:var(--ink-muted);">New to BloxdSpace? <a href="#/register" style="color:var(--ink);">Create an account</a></p>`;
+}
+function pageRegister() {
+  return `
+    <h1 style="font-size:20px;font-weight:600;">Create your account</h1>
+    <p style="margin-top:4px;font-size:14px;color:var(--ink-muted);">Join the BloxdSpace community.</p>
+    <form id="register-form" style="margin-top:20px;">
+      <div class="field"><label for="reg-username">Username</label><input id="reg-username" type="text" class="input" required pattern="[a-zA-Z0-9_]{3,20}" title="3-20 characters: letters, numbers, underscores" autocomplete="username"></div>
+      <div class="field"><label for="reg-email">Email</label><input id="reg-email" type="email" class="input" required autocomplete="email"></div>
+      <div class="field">
+        <label for="reg-password">Password</label>
+        <input id="reg-password" type="password" class="input" required minlength="8" autocomplete="new-password">
+        <p class="field-hint">At least 8 characters. Stored as a salted hash — never in plain text.</p>
+      </div>
+      <div id="register-result"></div>
+      <button type="submit" class="btn-primary" style="width:100%;">Create account</button>
+    </form>
+    <p style="margin-top:20px;text-align:center;font-size:14px;color:var(--ink-muted);">Already have an account? <a href="#/login" style="color:var(--ink);">Log in</a></p>`;
+}
+function pageResetPassword() {
+  return `
+    <h1 style="font-size:20px;font-weight:600;">Reset your password</h1>
+    <p style="margin-top:4px;font-size:14px;color:var(--ink-muted);">We'll send a reset link to your email.</p>
+    <form id="reset-form" style="margin-top:20px;">
+      <div class="field"><label for="reset-email">Email</label><input id="reset-email" type="email" class="input" required autocomplete="email"></div>
+      <div id="reset-result"></div>
+      <button type="submit" class="btn-primary" style="width:100%;">Send reset link</button>
+    </form>
+    <p style="margin-top:20px;text-align:center;font-size:14px;color:var(--ink-muted);"><a href="#/login" style="color:var(--ink);">Back to log in</a></p>`;
+}
+
+/* ---------------- direct messages ---------------- */
+
+let activeConversationId = null;
+let dmRealtimeChannel = null;
+let lastRenderedDmAuthor = null;
+let lastRenderedDmTime = 0;
+let hiddenConversationIds = new Set();
+try { hiddenConversationIds = new Set(JSON.parse(localStorage.getItem('bloxdspace-hidden-conversations') || '[]')); } catch (e) { hiddenConversationIds = new Set(); }
+function saveHiddenConversations() {
+  try { localStorage.setItem('bloxdspace-hidden-conversations', JSON.stringify([...hiddenConversationIds])); } catch (e) { /* storage unavailable */ }
+}
+
+function pageMessages() {
+  return `
+    ${pageHeader('Messages', 'Private conversations with other BloxdSpace members.')}
+    <div class="chat-wrap">
+      <div class="channel-list" id="conversation-list">${spinner()}</div>
+      <div class="chat-panel">
+        <div class="chat-header" id="dm-header"><div class="chat-header-title">Select a conversation</div></div>
+        <div class="chat-messages" id="dm-messages"></div>
+        <form class="chat-composer" id="dm-form" style="display:none;">
+          <div class="chat-input-wrap">
+            <button type="button" class="emoji-btn" data-emoji-target="dm-input" aria-label="Insert emoji">${icon('smile')}</button>
+            <input type="text" id="dm-input" placeholder="Type a message" maxlength="1000" autocomplete="off">
+          </div>
+          <button type="submit" class="chat-send-btn" aria-label="Send">${icon('send')}</button>
+        </form>
+      </div>
+    </div>`;
+}
+
+function dmMsgHtml(m, grouped) {
+  const mine = currentUser && m.sender_id === currentUser.id;
+  const img = (m.media_urls && m.media_urls[0]) ? `<img class="post-media" style="border-radius:12px;max-width:220px;${m.body ? 'margin-top:6px;' : ''}" src="${esc(m.media_urls[0])}" alt="">` : '';
+  const bubble = `<div class="chat-bubble ${mine ? 'mine' : 'theirs'}">${m.body ? esc(m.body) : ''}${img}</div>`;
+  const time = `<div class="chat-msg-time">${timeAgo(m.created_at)}</div>`;
+  if (mine) return `<div class="chat-msg-row mine"><div class="chat-msg-col">${bubble}${time}</div></div>`;
+  return `<div class="chat-msg-row theirs"><div class="chat-msg-avatar">${grouped ? '' : ''}</div><div class="chat-msg-col">${bubble}${time}</div></div>`;
+}
+function shouldGroupDm(senderId, createdAt) {
+  const grouped = senderId === lastRenderedDmAuthor && (new Date(createdAt).getTime() - lastRenderedDmTime) < 5 * 60 * 1000;
+  lastRenderedDmAuthor = senderId;
+  lastRenderedDmTime = new Date(createdAt).getTime();
+  return grouped;
+}
+
+async function findOrCreateConversation(otherUserId) {
+  const { data: mine } = await sb.from('conversation_members').select('conversation_id').eq('user_id', currentUser.id);
+  const myConvIds = (mine || []).map(r => r.conversation_id);
+  if (myConvIds.length) {
+    const { data: shared } = await sb.from('conversation_members').select('conversation_id').eq('user_id', otherUserId).in('conversation_id', myConvIds);
+    if (shared && shared.length) return shared[0].conversation_id;
+  }
+  const { data: conv, error } = await sb.from('conversations').insert({ is_group: false }).select('id').single();
+  if (error || !conv) return null;
+  await sb.from('conversation_members').insert({ conversation_id: conv.id, user_id: currentUser.id });
+  await sb.from('conversation_members').insert({ conversation_id: conv.id, user_id: otherUserId });
+  hiddenConversationIds.delete(conv.id);
+  saveHiddenConversations();
+  return conv.id;
+}
+
+async function loadConversationList() {
+  const listEl = document.getElementById('conversation-list');
+  if (!listEl) return [];
+  if (!currentUser) { listEl.innerHTML = `<p class="empty-desc" style="padding:4px;text-align:left;max-width:none;">Log in to view messages.</p>`; return []; }
+  const { data: memberRows } = await sb.from('conversation_members').select('conversation_id,last_read_at').eq('user_id', currentUser.id);
+  const convIds = (memberRows || []).map(r => r.conversation_id).filter(id => !hiddenConversationIds.has(id));
+  if (!convIds.length) { listEl.innerHTML = `<p class="empty-desc" style="padding:4px;text-align:left;max-width:none;">No conversations yet.</p>`; return []; }
+  const [{ data: allMembers }, { data: lastMessages }] = await Promise.all([
+    sb.from('conversation_members').select('conversation_id,user_id,profiles!conversation_members_user_id_fkey(username,display_name,avatar_url)').in('conversation_id', convIds),
+    sb.from('direct_messages').select('conversation_id,body,media_urls,created_at,sender_id').in('conversation_id', convIds).order('created_at', { ascending: false }),
+  ]);
+  const lastByConv = {};
+  (lastMessages || []).forEach(m => { if (!lastByConv[m.conversation_id]) lastByConv[m.conversation_id] = m; });
+  const readMap = {}; (memberRows || []).forEach(r => { readMap[r.conversation_id] = r.last_read_at; });
+  let items = convIds.map(cid => {
+    const other = (allMembers || []).find(m => m.conversation_id === cid && m.user_id !== currentUser.id);
+    const last = lastByConv[cid];
+    const unread = !!(last && last.sender_id !== currentUser.id && (!readMap[cid] || new Date(last.created_at) > new Date(readMap[cid])));
+    return { cid, other: (other && other.profiles) || {}, otherId: other ? other.user_id : null, last, unread };
+  }).filter(i => !blockedIds.has(i.otherId));
+  items.sort((a, b) => new Date((b.last && b.last.created_at) || 0) - new Date((a.last && a.last.created_at) || 0));
+  listEl.innerHTML = items.length ? items.map(i => `
+    <div style="position:relative;flex-shrink:0;">
+      <button class="channel-btn ${i.cid === activeConversationId ? 'active' : ''}" data-conversation-id="${i.cid}" data-other-id="${i.otherId || ''}">
+        <span style="flex-shrink:0;">${avatarHtml(i.other, 34)}</span>
+        <span style="min-width:0;flex:1;">
+          <span style="font-weight:600;display:block;">${esc(i.other.display_name || i.other.username || 'Unknown')}</span>
+          <span class="conv-preview">${i.last ? esc(i.last.body || ((i.last.media_urls && i.last.media_urls.length) ? 'Photo' : '')) : 'Say hello'}</span>
+        </span>
+        ${i.unread ? `<span class="unread-dot"></span>` : ''}
+      </button>
+      <button class="hide-conv-btn" type="button" data-hide-conv="${i.cid}" aria-label="Delete conversation locally">${icon('x')}</button>
+    </div>`).join('') : `<p class="empty-desc" style="padding:4px;text-align:left;max-width:none;">No conversations yet.</p>`;
+  if (window.lucide) lucide.createIcons();
+  return items;
+}
+
+function subscribeDm(cid) {
+  if (dmRealtimeChannel) { sb.removeChannel(dmRealtimeChannel); dmRealtimeChannel = null; }
+  dmRealtimeChannel = sb.channel('dm-' + cid)
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'direct_messages', filter: `conversation_id=eq.${cid}` }, async (payload) => {
+      const msg = payload.new;
+      const messagesEl = document.getElementById('dm-messages');
+      if (!messagesEl) return;
+      const emptyEl = messagesEl.querySelector('.chat-empty');
+      if (emptyEl) { messagesEl.innerHTML = ''; lastRenderedDmAuthor = null; }
+      messagesEl.insertAdjacentHTML('beforeend', dmMsgHtml(msg, shouldGroupDm(msg.sender_id, msg.created_at)));
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+      if (window.lucide) lucide.createIcons();
+      if (currentUser && msg.sender_id !== currentUser.id) {
+        await sb.from('conversation_members').update({ last_read_at: new Date().toISOString() }).eq('conversation_id', cid).eq('user_id', currentUser.id);
+      }
+    })
+    .subscribe();
+}
+
+async function openConversation(cid, otherId) {
+  activeConversationId = cid;
+  const other = await getProfileCached(otherId);
+  const headerEl = document.getElementById('dm-header');
+  if (headerEl) {
+    headerEl.innerHTML = `
+      <span class="chat-header-icon" style="background:transparent;box-shadow:none;padding:0;width:auto;height:auto;">${avatarHtml(other, 38)}</span>
+      <div><div class="chat-header-title">${esc((other && (other.display_name || other.username)) || 'Unknown')}</div><div class="chat-header-desc">@${esc((other && other.username) || '')}</div></div>`;
+  }
+  const form = document.getElementById('dm-form');
+  if (form) form.style.display = 'flex';
+  const messagesEl = document.getElementById('dm-messages');
+  if (!messagesEl) return;
+  messagesEl.innerHTML = spinner();
+  const { data } = await sb.from('direct_messages').select('id,body,media_urls,created_at,sender_id,deleted_at').eq('conversation_id', cid).is('deleted_at', null).order('created_at', { ascending: true }).limit(100);
+  lastRenderedDmAuthor = null; lastRenderedDmTime = 0;
+  messagesEl.innerHTML = (data && data.length) ? data.map(m => dmMsgHtml(m, shouldGroupDm(m.sender_id, m.created_at))).join('') : `<div class="chat-empty">${icon('mail')}<p class="empty-title">Say hello</p><p class="empty-desc">Send the first message.</p></div>`;
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+  if (window.lucide) lucide.createIcons();
+  if (currentUser) await sb.from('conversation_members').update({ last_read_at: new Date().toISOString() }).eq('conversation_id', cid).eq('user_id', currentUser.id);
+  subscribeDm(cid);
+}
+
+async function loadMessages(targetUserId) {
+  if (!currentUser) { await loadConversationList(); return; }
+  if (targetUserId) {
+    const cid = await findOrCreateConversation(targetUserId);
+    if (cid) activeConversationId = cid;
+  }
+  const items = await loadConversationList();
+  if (!activeConversationId && items.length) activeConversationId = items[0].cid;
+  document.querySelectorAll('[data-conversation-id]').forEach(b => b.classList.toggle('active', b.dataset.conversationId === activeConversationId));
+  if (activeConversationId) {
+    const activeItem = items.find(i => i.cid === activeConversationId) || { otherId: targetUserId };
+    await openConversation(activeConversationId, activeItem.otherId);
+  }
+}
+
+/* ---------------- router ---------------- */
+
+const routes = {
+  '#/': pageHome, '#/community': pageCommunity, '#/chat': pageChat, '#/players': pagePlayers,
+  '#/posts': pagePosts, '#/guides': pageGuides, '#/deals': pageDeals, '#/ads': pageAds, '#/events': pageEvents, '#/videos': pageVideos, '#/leaderboards': pageLeaderboards,
+  '#/notifications': pageNotifications, '#/create': pageCreate, '#/profile': pageProfile, '#/settings': pageSettings,
+  '#/messages': pageMessages,
+};
+const loaders = {
+  '#/': loadHome, '#/community': loadCommunity, '#/chat': loadChat, '#/posts': loadPostsPage,
+  '#/guides': loadGuidesPage, '#/deals': loadDealsPage, '#/ads': loadAdsPage, '#/events': loadEventsPage, '#/videos': loadVideosPage,
+  '#/players': loadPlayersPage, '#/leaderboards': loadLeaderboards,
+  '#/notifications': loadNotifications, '#/profile': loadProfilePage, '#/settings': loadSettingsPage,
+  '#/messages': () => loadMessages(),
+};
+const authPages = { '#/login': pageLogin, '#/register': pageRegister, '#/reset-password': pageResetPassword };
+const dynamicRoutes = [
+  { re: /^#\/u\/([^/]+)$/, navHash: '#/players', page: () => pageUserProfile(), load: (m) => loadUserProfilePage(decodeURIComponent(m[1])) },
+  { re: /^#\/p\/([^/]+)$/, navHash: '#/posts', page: () => pagePostDetail(), load: (m) => loadPostDetail(m[1]) },
+  { re: /^#\/messages\/([^/]+)$/, navHash: '#/messages', page: () => pageMessages(), load: (m) => loadMessages(m[1]) },
+];
+
+async function route() {
+  let hash = window.location.hash || '#/';
+  if (hash === '#/create-ad') { createActive = isAdsOwner() ? 'ad' : 'post'; hash = '#/create'; }
+  if (hash === '#/create-event') { createActive = 'event'; hash = '#/create'; }
+  if (hash === '#/create-youtube') { createActive = 'youtube'; hash = '#/create'; }
+  if (hash === '#/create-video') { createActive = 'yemvideo'; hash = '#/create'; }
+  window.scrollTo(0, 0);
+
+  if (chatRealtimeChannel && hash !== '#/chat') { sb.removeChannel(chatRealtimeChannel); chatRealtimeChannel = null; }
+  if (dmRealtimeChannel && !hash.startsWith('#/messages')) { sb.removeChannel(dmRealtimeChannel); dmRealtimeChannel = null; activeConversationId = null; }
+
+  if (authRoutes.includes(hash)) {
+    document.getElementById('shell').style.display = 'none';
+    document.getElementById('authshell').style.display = 'flex';
+    document.getElementById('authpage').innerHTML = authPages[hash]();
+  } else {
+    let dynamicMatch = null, dynamicParams = null;
+    if (!routes[hash]) {
+      for (const dr of dynamicRoutes) {
+        const m = hash.match(dr.re);
+        if (m) { dynamicMatch = dr; dynamicParams = m; break; }
+      }
+      if (!dynamicMatch) hash = '#/';
+    }
+    document.getElementById('shell').style.display = 'flex';
+    document.getElementById('authshell').style.display = 'none';
+    const navHash = dynamicMatch ? dynamicMatch.navHash : hash;
+    renderSidebar(navHash);
+    renderMobileNav(navHash);
+    document.getElementById('page').innerHTML = dynamicMatch ? dynamicMatch.page() : routes[hash]();
+    if (window.lucide) lucide.createIcons();
+    if (dynamicMatch) { if (dynamicMatch.load) await dynamicMatch.load(dynamicParams); }
+    else if (loaders[hash]) await loaders[hash]();
+  }
+  if (window.lucide) lucide.createIcons();
+}
+
+/* ---------------- global delegated events ---------------- */
+
+document.addEventListener('click', async (e) => {
+  if (e.target.id === 'lightbox-close' || e.target.id === 'lightbox') { closeLightbox(); return; }
+  const zoom = e.target.closest('.zoomable, .post-media, .avatar-img');
+  if (zoom && zoom.tagName === 'IMG') { openLightbox(zoom.src); return; }
+  if (e.target.closest('.open-yemvideo')) { openYemVideo(); return; }
+  const verifyBtn = e.target.closest('.verify-btn');
+  if (verifyBtn) {
+    if (!isOwner()) return;
+    const uid = verifyBtn.dataset.userId;
+    const next = verifyBtn.dataset.verified !== 'true';
+    let error = (await sb.rpc('owner_set_verified', { p_user: uid, p_verified: next })).error;
+    if (error) error = (await sb.from('profiles').update({ is_verified: next }).eq('id', uid)).error;
+    if (error) window.alert('Could not verify. Run FEATURES.sql first. ' + error.message);
+    else loadPlayersPage();
+    return;
+  }
+  const cf = e.target.closest('[data-community-filter]');
+  if (cf) { communityActive = cf.dataset.communityFilter; document.querySelectorAll('[data-community-filter]').forEach(b => b.classList.toggle('active', b === cf)); loadCommunity(); return; }
+
+  const gc = e.target.closest('[data-guide-category]');
+  if (gc) { guideCategoryActive = gc.dataset.guideCategory || ''; document.querySelectorAll('[data-guide-category]').forEach(b => b.classList.toggle('active', b === gc)); loadGuidesPage(); return; }
+
+  const lb = e.target.closest('[data-lb-filter]');
+  if (lb) { leaderboardActive = lb.dataset.lbFilter; document.querySelectorAll('[data-lb-filter]').forEach(b => b.classList.toggle('active', b === lb)); loadLeaderboards(); return; }
+
+  const ch = e.target.closest('[data-channel]');
+  if (ch) {
+    chatActive = ch.dataset.channel;
+    document.querySelectorAll('[data-channel]').forEach(b => b.classList.toggle('active', b === ch));
+    const input = document.getElementById('chat-input');
+    if (input) input.placeholder = currentUser ? 'Message #' + chatActive : 'Sign in to send a message';
+    loadChat();
+    return;
+  }
+
+  const ct = e.target.closest('[data-create-type]');
+  if (ct) { createActive = ct.dataset.createType; document.getElementById('page').innerHTML = pageCreate(); if (window.lucide) lucide.createIcons(); return; }
+
+  const emojiBtn = e.target.closest('.emoji-btn[data-emoji-target]');
+  if (emojiBtn) { e.stopPropagation(); toggleEmojiPopover(emojiBtn, emojiBtn.dataset.emojiTarget); return; }
+
+  const chatImageBtn = e.target.closest('#chat-image-btn');
+  if (chatImageBtn) { document.getElementById('chat-image-input').click(); return; }
+
+  const emojiChoice = e.target.closest('.emoji-popover-fixed button');
+  if (emojiChoice) {
+    const pop = document.getElementById('emoji-popover');
+    const targetId = pop ? pop.dataset.targetInput : 'chat-input';
+    const input = document.getElementById(targetId);
+    if (input) { input.value += emojiChoice.dataset.emoji; input.focus(); }
+    if (pop) pop.remove();
+    return;
+  }
+
+  const likeBtn = e.target.closest('.like-btn');
+  if (likeBtn) { onLikeClick(likeBtn); return; }
+
+  const saveBtn = e.target.closest('.save-btn');
+  if (saveBtn) { onSaveClick(saveBtn); return; }
+
+  const shareBtn = e.target.closest('.share-btn');
+  if (shareBtn) { onShareClick(shareBtn); return; }
+
+  const followBtn = e.target.closest('.follow-btn');
+  if (followBtn) { onFollowClick(followBtn); return; }
+
+  const editPostBtn = e.target.closest('.edit-post-btn');
+  if (editPostBtn) { onEditPostClick(editPostBtn); return; }
+
+  const cancelEditBtn = e.target.closest('.cancel-edit-btn');
+  if (cancelEditBtn) { onCancelEditClick(cancelEditBtn); return; }
+
+  const deletePostBtn = e.target.closest('.delete-post-btn');
+  if (deletePostBtn) { onDeletePostClick(deletePostBtn); return; }
+
+  const commentToggle = e.target.closest('.comment-toggle');
+  if (commentToggle) { onCommentToggle(commentToggle.dataset.postId); return; }
+
+  const completeBtn = e.target.closest('.complete-deal-btn');
+  if (completeBtn) { onCompleteDealClick(completeBtn); return; }
+
+  const reportBtn = e.target.closest('.report-btn');
+  if (reportBtn) { onReportClick(reportBtn); return; }
+
+  const blockBtn = e.target.closest('.block-btn');
+  if (blockBtn) { onBlockClick(blockBtn); return; }
+
+  const unblockBtn = e.target.closest('.unblock-btn');
+  if (unblockBtn) { await sb.from('blocks').delete().eq('blocker_id', currentUser.id).eq('blocked_id', unblockBtn.dataset.userId); blockedIds.delete(unblockBtn.dataset.userId); loadSettingsPage(); return; }
+
+  const resolveBtn = e.target.closest('.resolve-report-btn');
+  if (resolveBtn) { await sb.from('reports').update({ status: 'resolved' }).eq('id', resolveBtn.dataset.reportId); loadSettingsPage(); return; }
+
+  const removeContentBtn = e.target.closest('.remove-content-btn');
+  if (removeContentBtn) {
+    const reason = window.prompt('Reason for removing this content?', 'Violates community guidelines');
+    if (!reason) return;
+    const { error } = await sb.rpc('moderate_remove_content', { p_target_type: removeContentBtn.dataset.targetType, p_target_id: removeContentBtn.dataset.targetId, p_reason: reason, p_related_report: removeContentBtn.dataset.reportId });
+    if (error) window.alert(error.message); else loadSettingsPage();
+    return;
+  }
+
+  const warnUserBtn = e.target.closest('.warn-user-btn');
+  if (warnUserBtn) {
+    const reason = window.prompt('Reason for the warning?');
+    if (!reason) return;
+    const targetUser = await resolveReportTargetUser(warnUserBtn.dataset.targetType, warnUserBtn.dataset.targetId);
+    if (!targetUser) { window.alert('Could not find the user behind this content.'); return; }
+    const { error } = await sb.rpc('moderate_user', { p_target_user: targetUser, p_action: 'warn', p_reason: reason, p_related_report: warnUserBtn.dataset.reportId });
+    if (error) window.alert(error.message); else loadSettingsPage();
+    return;
+  }
+
+  const banUserBtn = e.target.closest('.ban-user-btn');
+  if (banUserBtn) {
+    if (!window.confirm('Ban this user? They will no longer be able to post, comment, or chat.')) return;
+    const reason = window.prompt('Reason for the ban?', 'Violates community guidelines');
+    if (!reason) return;
+    const targetUser = await resolveReportTargetUser(banUserBtn.dataset.targetType, banUserBtn.dataset.targetId);
+    if (!targetUser) { window.alert('Could not find the user behind this content.'); return; }
+    const { error } = await sb.rpc('moderate_user', { p_target_user: targetUser, p_action: 'ban', p_reason: reason, p_related_report: banUserBtn.dataset.reportId });
+    if (error) window.alert(error.message); else loadSettingsPage();
+    return;
+  }
+
+  const unbanUserBtn = e.target.closest('.unban-user-btn');
+  if (unbanUserBtn) {
+    const { error } = await sb.rpc('unban_user', { p_target_user: unbanUserBtn.dataset.userId });
+    const searchInput = document.getElementById('mod-user-search');
+    if (error) window.alert(error.message); else if (searchInput) runModUserSearch(searchInput.value.trim());
+    return;
+  }
+
+  const banUserDirectBtn = e.target.closest('.ban-user-direct-btn');
+  if (banUserDirectBtn) {
+    const reason = window.prompt('Reason for the ban?', 'Violates community guidelines');
+    if (!reason) return;
+    const { error } = await sb.rpc('moderate_user', { p_target_user: banUserDirectBtn.dataset.userId, p_action: 'ban', p_reason: reason });
+    const searchInput = document.getElementById('mod-user-search');
+    if (error) window.alert(error.message); else if (searchInput) runModUserSearch(searchInput.value.trim());
+    return;
+  }
+
+  const convBtn = e.target.closest('[data-conversation-id]');
+  if (convBtn) {
+    document.querySelectorAll('[data-conversation-id]').forEach(b => b.classList.toggle('active', b === convBtn));
+    openConversation(convBtn.dataset.conversationId, convBtn.dataset.otherId);
+    return;
+  }
+
+  const hideConvBtn = e.target.closest('[data-hide-conv]');
+  if (hideConvBtn) {
+    e.stopPropagation();
+    const cid = hideConvBtn.dataset.hideConv;
+    hiddenConversationIds.add(cid);
+    saveHiddenConversations();
+    if (activeConversationId === cid) activeConversationId = null;
+    loadMessages();
+    return;
+  }
+
+  const logoutBtn = e.target.closest('#logout-btn');
+  if (logoutBtn) { await sb.auth.signOut(); window.location.hash = '#/'; return; }
+
+  const deleteBtn = e.target.closest('#delete-account-btn');
+  if (deleteBtn) {
+    if (!window.confirm('This permanently deletes your account and cannot be undone. Continue?')) return;
+    const { error } = await sb.rpc('delete_own_account');
+    if (!error) { await sb.auth.signOut(); window.location.hash = '#/'; } else { window.alert('Could not delete account: ' + error.message); }
+    return;
+  }
+
+  const openPopover = document.getElementById('emoji-popover');
+  if (openPopover && !openPopover.contains(e.target)) openPopover.remove();
+});
+
+document.addEventListener('input', debounce((e) => {
+  if (e.target.id === 'players-search') runPlayerSearch(e.target.value.trim());
+  if (e.target.id === 'community-search') loadCommunity();
+  if (e.target.id === 'mod-user-search') runModUserSearch(e.target.value.trim());
+}, 350));
+
+document.addEventListener('change', async (e) => {
+  if (e.target.id === 'chat-image-input') {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file || !currentUser) return;
+    const channel = chatChannelsCache.find(c => c.slug === chatActive);
+    if (!channel) return;
+    const path = `${currentUser.id}/${Date.now()}-${file.name}`;
+    const { error: upErr } = await sb.storage.from('bloxdspace-media').upload(path, file);
+    if (upErr) { window.alert(upErr.message); return; }
+    const { data: pub } = sb.storage.from('bloxdspace-media').getPublicUrl(path);
+    const { error } = await sb.from('chat_messages').insert({ channel_id: channel.id, author_id: currentUser.id, media_urls: [pub.publicUrl] });
+    if (error) window.alert('Could not send image: ' + error.message);
+    return;
+  }
+});
+
+document.addEventListener('submit', async (e) => {
+  if (e.target.classList.contains('comment-form')) {
+    e.preventDefault();
+    if (!currentUser) return;
+    const postId = e.target.dataset.postId;
+    const input = e.target.querySelector('input');
+    const body = input.value.trim();
+    if (!body) return;
+    input.disabled = true;
+    const { error } = await sb.from('comments').insert({ post_id: postId, author_id: currentUser.id, body });
+    input.disabled = false;
+    if (!error) {
+      input.value = '';
+      const panel = document.getElementById('comments-' + postId);
+      const comments = await fetchComments(postId);
+      panel.innerHTML = commentsHtml(postId, comments);
+      const countSpan = document.querySelector(`.comment-toggle[data-post-id="${postId}"] span`);
+      if (countSpan) countSpan.textContent = comments.length;
+      if (window.lucide) lucide.createIcons();
+    }
+    return;
+  }
+
+  if (e.target.id === 'chat-form') {
+    e.preventDefault();
+    if (!currentUser) return;
+    const input = document.getElementById('chat-input');
+    const body = input.value.trim();
+    if (!body) return;
+    const channel = chatChannelsCache.find(c => c.slug === chatActive);
+    if (!channel) return;
+    input.value = '';
+    const { error } = await sb.from('chat_messages').insert({ channel_id: channel.id, author_id: currentUser.id, body });
+    if (error) window.alert('Could not send: ' + error.message);
+    return;
+  }
+
+  if (e.target.id === 'dm-form') {
+    e.preventDefault();
+    if (!currentUser || !activeConversationId) return;
+    const input = document.getElementById('dm-input');
+    const body = input.value.trim();
+    if (!body) return;
+    input.value = '';
+    const { error } = await sb.from('direct_messages').insert({ conversation_id: activeConversationId, sender_id: currentUser.id, body });
+    if (error) window.alert('Could not send: ' + error.message);
+    else await sb.from('conversation_members').update({ last_read_at: new Date().toISOString() }).eq('conversation_id', activeConversationId).eq('user_id', currentUser.id);
+    return;
+  }
+
+  if (e.target.classList.contains('edit-post-form')) {
+    e.preventDefault();
+    const postId = e.target.dataset.postId;
+    const title = e.target.querySelector('.edit-title-input').value.trim();
+    const body = e.target.querySelector('.edit-body-input').value.trim();
+    const { error } = await sb.from('posts').update({ title, body: body || null }).eq('id', postId);
+    const card = e.target.closest('.post-card');
+    if (!error) {
+      const titleEl = card.querySelector('.post-title');
+      if (titleEl) { titleEl.textContent = title; titleEl.style.display = ''; }
+      let bodyEl = card.querySelector('.post-body');
+      if (body) {
+        if (bodyEl) { bodyEl.textContent = body; bodyEl.style.display = ''; }
+        else { bodyEl = document.createElement('div'); bodyEl.className = 'post-body'; bodyEl.textContent = body; titleEl.after(bodyEl); }
+      } else if (bodyEl) { bodyEl.remove(); }
+      e.target.remove();
+    } else { window.alert('Could not save: ' + error.message); }
+    return;
+  }
+
+  if (e.target.id === 'create-form') {
+    e.preventDefault();
+    const title = document.getElementById('create-title').value.trim();
+    const body = document.getElementById('create-body').value.trim();
+    const fileInput = document.getElementById('create-image');
+    const file = fileInput ? fileInput.files[0] : null;
+    const categorySelect = document.getElementById('create-category');
+    const ytInput = document.getElementById('create-youtube');
+    const extraUrl = ytInput ? ytInput.value.trim() : '';
+    let category = categorySelect ? categorySelect.value : '';
+    if (createActive === 'ad') category = 'ad';
+    if (createActive === 'event') category = 'event';
+    if (createActive === 'youtube') category = 'video';
+    if (createActive === 'youtube' && !youtubeIdFrom(extraUrl)) {
+      document.getElementById('create-result').innerHTML = banner('Paste a valid YouTube link.', 'error');
+      if (window.lucide) lucide.createIcons();
+      return;
+    }
+    const resultEl = document.getElementById('create-result');
+    const submitBtn = document.getElementById('create-submit');
+    submitBtn.disabled = true; submitBtn.textContent = 'Publishing…';
+    const res = await createPost({ type: POST_TYPE_MAP[createActive], title, body, file, category, extraUrl: extraUrl || null });
+    submitBtn.disabled = false; submitBtn.textContent = 'Publish';
+    if (res.error) { resultEl.innerHTML = banner(res.error, 'error'); }
+    else {
+      const dest = createActive === 'deal' ? '#/deals' : createActive === 'guide' ? '#/guides' : createActive === 'ad' ? '#/ads' : createActive === 'event' ? '#/events' : createActive === 'youtube' ? '#/videos' : '#/posts';
+      resultEl.innerHTML = banner('Published!') + `<a href="${dest}" style="color:var(--accent);font-size:13px;">View it</a>`;
+      e.target.reset();
+    }
+    if (window.lucide) lucide.createIcons();
+    return;
+  }
+
+  if (e.target.id === 'announcement-form') {
+    e.preventDefault();
+    if (!isCreator()) return;
+    const title = document.getElementById('a-title').value.trim();
+    const body = document.getElementById('a-body').value.trim();
+    const resultEl = document.getElementById('announcement-result');
+    const btn = e.target.querySelector('button[type="submit"]');
+    btn.disabled = true;
+    const { error } = await sb.from('announcements').insert({ author_id: currentUser.id, title, body: body || null });
+    btn.disabled = false;
+    if (error) { resultEl.innerHTML = banner(error.message, 'error'); }
+    else { resultEl.innerHTML = banner('Announcement posted.'); e.target.reset(); loadNotifications(); }
+    if (window.lucide) lucide.createIcons();
+    return;
+  }
+
+  if (e.target.id === 'settings-profile-form') {
+    e.preventDefault();
+    const display_name = document.getElementById('s-display-name').value.trim();
+    const bio = document.getElementById('s-bio').value.trim();
+    const bloxd_username = document.getElementById('s-bloxd').value.trim();
+    const is_bloxd_username_public = document.getElementById('s-bloxd-public').checked;
+    const avatarInput = document.getElementById('s-avatar');
+    const avatarFile = avatarInput && avatarInput.files[0];
+    const resultEl = document.getElementById('settings-profile-result');
+    const updates = { display_name, bio, bloxd_username, is_bloxd_username_public };
+    if (avatarFile) {
+      resultEl.innerHTML = banner('Uploading avatar…');
+      const path = `${currentUser.id}/avatar-${Date.now()}-${avatarFile.name}`;
+      const { error: upErr } = await sb.storage.from('bloxdspace-media').upload(path, avatarFile);
+      if (upErr) { resultEl.innerHTML = banner(upErr.message, 'error'); if (window.lucide) lucide.createIcons(); return; }
+      const { data: pub } = sb.storage.from('bloxdspace-media').getPublicUrl(path);
+      updates.avatar_url = pub.publicUrl;
+    }
+    const { error } = await sb.from('profiles').update(updates).eq('id', currentUser.id);
+    if (error) { resultEl.innerHTML = banner(error.message, 'error'); }
+    else { await loadProfile(); renderSidebar(window.location.hash || '#/'); resultEl.innerHTML = banner('Saved.'); }
+    if (window.lucide) lucide.createIcons();
+    return;
+  }
+
+  if (e.target.id === 'settings-password-form') {
+    e.preventDefault();
+    const pw = document.getElementById('s-new-password').value;
+    const resultEl = document.getElementById('settings-password-result');
+    if (!pw || pw.length < 8) { resultEl.innerHTML = banner('Password must be at least 8 characters.', 'error'); if (window.lucide) lucide.createIcons(); return; }
+    const { error } = await sb.auth.updateUser({ password: pw });
+    resultEl.innerHTML = error ? banner(error.message, 'error') : banner('Password updated.');
+    e.target.reset();
+    if (window.lucide) lucide.createIcons();
+    return;
+  }
+
+  if (e.target.id === 'login-form') {
+    e.preventDefault();
+    const email = document.getElementById('login-email').value.trim();
+    const password = document.getElementById('login-password').value;
+    const resultEl = document.getElementById('login-result');
+    resultEl.innerHTML = banner('Logging in…');
+    const { error } = await sb.auth.signInWithPassword({ email, password });
+    if (error) { resultEl.innerHTML = banner(error.message, 'error'); if (window.lucide) lucide.createIcons(); }
+    else { window.location.hash = '#/'; }
+    return;
+  }
+
+  if (e.target.id === 'register-form') {
+    e.preventDefault();
+    const username = document.getElementById('reg-username').value.trim();
+    const email = document.getElementById('reg-email').value.trim();
+    const password = document.getElementById('reg-password').value;
+    const resultEl = document.getElementById('register-result');
+    resultEl.innerHTML = banner('Creating your account…');
+    const { data, error } = await sb.auth.signUp({ email, password, options: { data: { username } } });
+    if (error) { resultEl.innerHTML = banner(error.message, 'error'); }
+    else if (data.session) { window.location.hash = '#/'; return; }
+    else { resultEl.innerHTML = banner(`Account created. Check ${email} for a confirmation link, then log in.`); }
+    if (window.lucide) lucide.createIcons();
+    return;
+  }
+
+  if (e.target.id === 'reset-form') {
+    e.preventDefault();
+    const email = document.getElementById('reset-email').value.trim();
+    const resultEl = document.getElementById('reset-result');
+    const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: window.location.href.split('#')[0] });
+    resultEl.innerHTML = error ? banner(error.message, 'error') : banner(`If an account exists for ${email}, a reset link is on its way.`);
+    if (window.lucide) lucide.createIcons();
+    return;
+  }
+});
+
+/* ---------------- init ---------------- */
+
+async function init() {
+  const { data: { session } } = await sb.auth.getSession();
+  currentUser = session ? session.user : null;
+  if (currentUser) { await loadProfile(); await loadBlocked(); }
+
+  sb.auth.onAuthStateChange(async (_event, session) => {
+    const newUser = session ? session.user : null;
+    const changed = (newUser && newUser.id) !== (currentUser && currentUser.id);
+    currentUser = newUser;
+    if (currentUser) { await loadProfile(); await loadBlocked(); } else { currentProfile = null; blockedIds = new Set(); }
+    if (changed) route();
+  });
+
+  route();
+}
+
+window.addEventListener('hashchange', route);
+window.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
